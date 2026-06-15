@@ -10,3 +10,8 @@ backend/hostfile
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Python cache files
+__pycache__/
+*.pyc
+
