@@ -12,8 +12,8 @@ Trường Đại học Công nghệ Thông tin và Truyền thông, Đại học
 
 Hệ thống được thiết kế theo mô hình 3 lớp (3-tier architecture):
 1. **Simulation Core (C/C++ MPI)**: Mã nguồn tính toán lực hấp dẫn Newtonian trực tiếp $O(N^2)$ có làm mềm lực $\epsilon$, được song song hóa bằng thư viện MPI sử dụng giao tiếp tập thể `MPI_Allgatherv`.
-2. **Back-End (Python - FastAPI)**: API điều phối và monitor, tự động chạy lệnh `mpirun` với tiến trình MPI chỉ định (tối đa 16 processes phân bố trên 1 Master + 4 Nodes), tự động sinh `hostfile` cho môi trường multi-node, đo tải CPU thực tế qua `psutil` và đo lưu lượng mạng trao đổi dữ liệu.
-3. **Front-End (HTML/JS - WebGL Three.js)**: Dashboard kính mờ (glassmorphic dark space) hiển thị thời gian thực hoạt cảnh vụ va chạm thiên hà và đo các chỉ số hiệu năng (CPU Master, CPU Node 1-4, Network traffic).
+2. **Back-End (Python - FastAPI Modular)**: API điều phối và monitor được tổ chức theo cấu trúc module chuyên nghiệp. Tự động sinh `hostfile` cho môi trường multi-node, quản lý tiến trình con `mpirun`, thu thập log stdout thời gian thực từ rank 0, đo tải CPU thực tế qua `psutil` và đo lưu lượng mạng trao đổi dữ liệu.
+3. **Front-End (HTML/JS - WebGL Three.js & Chart.js)**: Dashboard kính mờ (glassmorphic dark space) tích hợp đồ thị hiệu năng Chart.js, bản đồ phân chia tiến trình MPI Ranks Mapping, ô cấu hình IP cluster và màn hình terminal dòng lệnh hiển thị log thời gian thực.
 
 ---
 
@@ -22,7 +22,19 @@ Hệ thống được thiết kế theo mô hình 3 lớp (3-tier architecture):
 ```text
 hpc-galaxy-sim/
 ├── backend/
-│   └── app.py            # FastAPI Server quản lý và điều phối mpirun
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py       # Khởi tạo FastAPI app, CORS & tích hợp routers
+│   │   ├── config.py     # Quản lý đường dẫn tương đối (portable paths)
+│   │   ├── routers/
+│   │   │   ├── simulation.py # API: /run, /stop, /status
+│   │   │   └── monitor.py    # API: /monitor
+│   │   ├── schemas/
+│   │   │   └── simulation.py # Lược đồ Pydantic RunConfig
+│   │   └── services/
+│   │       └── simulation.py # Background worker quản lý mpirun & stdout logs
+│   ├── requirements.txt  # Các thư viện python phụ thuộc
+│   └── run.py            # Kịch bản khởi chạy Uvicorn server (cổng 8000)
 ├── frontend/
 │   └── index.html        # Web Dashboard giám sát và visualizer 3D Three.js
 ├── scripts/
@@ -32,6 +44,7 @@ hpc-galaxy-sim/
 ├── data/                 # Thư mục chứa các tệp dữ liệu tọa độ hạt sinh ra
 │   ├── galaxy_collision_10k.txt
 │   └── galaxy_collision_20k.txt
+├── .gitignore
 └── README.md
 ```
 
@@ -64,18 +77,24 @@ mpirun -np 4 ./scripts/nbody_mpi ./data/galaxy_collision_10k.txt 100 0.01
 
 **Bước 1**: Cài đặt các thư viện Python bổ trợ cho backend:
 ```bash
-pip install fastapi uvicorn psutil pydantic
+pip install -r backend/requirements.txt
 ```
 
 **Bước 2**: Khởi chạy Back-End FastAPI:
 ```bash
-python backend/app.py
+python backend/run.py
 ```
-Server sẽ lắng nghe tại địa chỉ `http://localhost:8000`.
+Server sẽ lắng nghe tại địa chỉ `http://localhost:8000`. Bạn có thể truy cập tài liệu Swagger UI của API tại `http://localhost:8000/docs`.
 
 **Bước 3**: Mở giao diện Dashboard:
 Mở trực tiếp file `frontend/index.html` bằng trình duyệt Web của bạn.
 
-*Tính năng giao diện:*
-- **Demo Mode**: Chạy mô phỏng cục bộ ngay trong trình duyệt ở tốc độ 60 FPS (sử dụng restricted 3-body solver).
-- **Live MPI Run**: Kết nối và điều khiển trực tiếp FastAPI backend. Cho phép tăng giảm số lượng Processes (1-16) và Nodes hoạt động (1-4). Nhấn nút **Run MPI** để BE tự động chạy lệnh `mpirun` song song và đồng bộ hóa frame chuyển động lên canvas 3D, đồng thời cập nhật tải trọng CPU của các node trên bảng điều khiển. (Khi chạy trên Windows không cài MPI, backend tự động chuyển sang chế độ giả lập để debug GUI).
+---
+
+## 🖥 Tính năng Giao diện Web Dashboard
+
+- **Demo Mode**: Chạy mô phỏng cục bộ ngay trong trình duyệt ở tốc độ 60 FPS (sử dụng restricted 3-body solver) cùng chế độ bay camera tự động **Fly-Through Mode**.
+- **Cluster Network Settings**: Nhập cấu hình địa chỉ IP cho Master và 4 Nodes. Bản đồ phân phối rank sẽ cập nhật hiển thị IP tương ứng ngay lập tức.
+- **MPI Ranks Mapping**: Phân tích và biểu diễn trực quan cách chia luồng tiến trình (`Rank 0` tới `Rank P-1`) lên các Node cụ thể dựa trên số lượng Processes và Compute Nodes bạn chọn.
+- **Performance Analysis**: Biểu đồ Chart.js so sánh hai trục Y: Thời gian thực thi (Time) và Tốc độ tăng tốc (Speedup). Đồ thị hiển thị sẵn đường benchmark thực tế và đường speedup lý thuyết. Khi lượt chạy mô phỏng hoàn tất, đồ thị tự động chấm thêm một điểm xanh lá (**Your Run**) thể hiện trực quan kết quả chạy thực tế của bạn.
+- **MPI Terminal Output**: Khung console giả lập terminal in ra stdout dòng lệnh mpirun từ backend theo thời gian thực (các bước chạy rank, thời gian chạy, speedup, và hiệu suất Parallel Efficiency).
