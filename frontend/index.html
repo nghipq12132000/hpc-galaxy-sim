@@ -582,6 +582,24 @@
             <button class="btn" id="reset-demo-btn" onclick="loadDemoMode()"><i class="fa-solid fa-rotate-left"></i> Switch back to Demo Mode</button>
         </div>
 
+        <!-- Generate Dataset Section -->
+        <div class="control-group">
+            <div class="section-title">Generate Dataset</div>
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Particle Size (N)</span>
+                </div>
+                <select id="select-gen-particles" class="btn" style="width: 100%; text-align: left; background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <option value="1000">1,000 particles (Testing)</option>
+                    <option value="5000">5,000 particles (Standard)</option>
+                    <option value="10000" selected>10,000 particles (High)</option>
+                    <option value="20000">20,000 particles (Extreme)</option>
+                </select>
+            </div>
+            <button class="btn btn-accent" id="btn-generate-data" onclick="generateDataset()"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate Data</button>
+        </div>
+
+
         <!-- Particle Visualization Settings -->
         <div class="control-group">
             <div class="section-title">Visualization</div>
@@ -2157,6 +2175,108 @@
             }
         }
 
+        // --- Load Available Datasets Dynamically ---
+        async function loadDatasetOptions() {
+            try {
+                const response = await fetch(`${API_BASE}/datasets`);
+                if (!response.ok) return;
+                const datasets = await response.json();
+                
+                const selectElement = document.getElementById('select-mpi-dataset');
+                const currentValue = selectElement.value;
+                selectElement.innerHTML = '';
+                
+                datasets.forEach(dataset => {
+                    const opt = document.createElement('option');
+                    opt.value = dataset;
+                    let label = dataset;
+                    if (dataset.includes("10k")) label = `${dataset} (10k)`;
+                    else if (dataset.includes("20k")) label = `${dataset} (20k)`;
+                    else if (dataset.includes("5k")) label = `${dataset} (5k)`;
+                    else if (dataset.includes("1k")) label = `${dataset} (1k)`;
+                    else {
+                        const match = dataset.match(/_(\d+k|\d+)\.txt/);
+                        if (match) {
+                            label = `${dataset} (${match[1]})`;
+                        }
+                    }
+                    opt.innerText = label;
+                    selectElement.appendChild(opt);
+                });
+                
+                // Restore selection if it still exists
+                if (datasets.includes(currentValue)) {
+                    selectElement.value = currentValue;
+                } else if (datasets.length > 0) {
+                    if (datasets.includes("galaxy_collision_10k.txt")) {
+                        selectElement.value = "galaxy_collision_10k.txt";
+                    } else {
+                        selectElement.value = datasets[0];
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load datasets:", err);
+            }
+        }
+
+        // --- Generate Dataset Trigger ---
+        async function generateDataset() {
+            const particlesSelect = document.getElementById('select-gen-particles');
+            const particles = parseInt(particlesSelect.value);
+            
+            const btn = document.getElementById('btn-generate-data');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+            
+            document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating data...';
+            appendConsole(`[System] Requesting data generation for ${particles} particles from backend...`);
+            
+            try {
+                const response = await fetch(`${API_BASE}/generate-data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ particles: particles })
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "Generation failed");
+                }
+                
+                const data = await response.json();
+                appendConsole(`[System] Generation successful! Created: ${data.filename}`);
+                document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Generated: ${data.filename}`;
+                
+                // Refresh status logs to show detailed generation steps in terminal stdout
+                const statusResponse = await fetch(`${API_BASE}/status`);
+                if (statusResponse.ok) {
+                    const status = await statusResponse.json();
+                    if (status.logs && status.logs.length > 0) {
+                        const term = document.getElementById('terminal-output');
+                        term.innerText = status.logs.join('\n');
+                        term.scrollTop = term.scrollHeight;
+                    }
+                }
+                
+                // Reload dataset options list
+                await loadDatasetOptions();
+                
+                // Automatically select the newly generated dataset in MPI list
+                const selectElement = document.getElementById('select-mpi-dataset');
+                selectElement.value = data.filename;
+                
+            } catch (err) {
+                console.error("Generation error:", err);
+                document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Gen Error`;
+                appendConsole(`[Error] Data generation failed: ${err.message}`);
+                alert("Generation failed: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
         // Start resource monitoring loop immediately
         monitorInterval = setInterval(pollMonitorStats, 800);
 
@@ -2169,6 +2289,8 @@
             parseInt(document.getElementById('slider-mpi-procs').value),
             parseInt(document.getElementById('slider-mpi-nodes').value)
         );
+        loadDatasetOptions();
+
 
     </script>
 </body>

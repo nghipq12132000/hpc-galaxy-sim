@@ -60,10 +60,6 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
     np.random.seed(42)
     
-    # Total particles N = 10,000 (each galaxy has 5000 particles: 1 black hole + 4999 stars)
-    N_10k = 10000
-    N_20k = 20000
-    
     # Parameters
     g1_pos = np.array([-50.0, 0.0, 0.0])
     g1_vel = np.array([3.2, 0.6, 0.0]) # has minor y component for non-head-on collision
@@ -79,6 +75,33 @@ def main():
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
         
+    # Check if a custom particle count was passed as command line argument
+    if len(sys.argv) > 1:
+        try:
+            N = int(sys.argv[1])
+            if N < 100 or N > 100000:
+                print(f"Error: Particle count must be between 100 and 100,000. Got {N}")
+                sys.exit(1)
+            
+            stars_per_galaxy = (N // 2) - 1
+            g1_data = generate_galaxy(g1_pos, g1_vel, g1_mass, stars_per_galaxy, 5.0, 32.0, 1)
+            g2_data = generate_galaxy(g2_pos, g2_vel, g2_mass, stars_per_galaxy, 5.0, 32.0, 2)
+            data = np.vstack((g1_data, g2_data))
+            
+            # Format output name
+            suffix = f"{N//1000}k" if N % 1000 == 0 else f"{N}"
+            out_file = os.path.join(dest_dir, f"galaxy_collision_{suffix}.txt")
+            np.savetxt(out_file, data, fmt="%.6f %.6f %.6f %.6f %.6f %.6f %.6f")
+            print(f"Generated {N} particle data at {out_file}")
+            return
+        except ValueError:
+            print("Error: Invalid particle count argument. Must be an integer.")
+            sys.exit(1)
+            
+    # Default behavior: generate both 10k and 20k data
+    N_10k = 10000
+    N_20k = 20000
+    
     # Generate 10k data
     stars_per_galaxy_10k = (N_10k // 2) - 1
     g1_data = generate_galaxy(g1_pos, g1_vel, g1_mass, stars_per_galaxy_10k, 5.0, 32.0, 1)

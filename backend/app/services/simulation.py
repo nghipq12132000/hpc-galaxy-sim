@@ -194,3 +194,54 @@ class SimulationService:
             return "idle"
         sim_state.is_running = False
         return "stopping"
+
+    @staticmethod
+    def generate_dataset(particles: int):
+        global sim_state
+        sim_state.logs.append(f"[System] Request received to generate dataset with {particles} particles...")
+        
+        # Build execution command
+        script_path = os.path.join(SCRIPTS_DIR, "generate_galaxy_data.py")
+        cmd = [sys.executable, script_path, str(particles)]
+        sim_state.logs.append(f"[System] Running generation command: {' '.join(cmd)}")
+        
+        try:
+            # Run the command and capture output
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+                cwd=SCRIPTS_DIR
+            )
+            # Log stdout
+            if result.stdout:
+                for line in result.stdout.splitlines():
+                    sim_state.logs.append(line.strip())
+            # Log stderr if any
+            if result.stderr:
+                for line in result.stderr.splitlines():
+                    sim_state.logs.append(f"[stderr] {line.strip()}")
+            
+            # Determine output suffix
+            suffix = f"{particles//1000}k" if particles % 1000 == 0 else f"{particles}"
+            filename = f"galaxy_collision_{suffix}.txt"
+            sim_state.logs.append(f"[System] Dataset {filename} generated successfully.")
+            return True, filename
+            
+        except subprocess.CalledProcessError as e:
+            error_msg = f"Generation script failed with exit code {e.returncode}."
+            sim_state.logs.append(f"[Error] {error_msg}")
+            if e.stdout:
+                for line in e.stdout.splitlines():
+                    sim_state.logs.append(line.strip())
+            if e.stderr:
+                for line in e.stderr.splitlines():
+                    sim_state.logs.append(f"[stderr] {line.strip()}")
+            return False, error_msg
+        except Exception as e:
+            error_msg = f"Failed to execute generation process: {str(e)}"
+            sim_state.logs.append(f"[Error] {error_msg}")
+            return False, error_msg
+

@@ -6,3 +6,7 @@ class RunConfig(BaseModel):
     dataset: str
     steps: int
     dt: float
+
+class GenerateConfig(BaseModel):
+    particles: int
+
