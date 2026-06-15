@@ -55,13 +55,13 @@ def run_simulation_worker(config: RunConfig):
     sim_state.start_time = time.time()
     sim_state.error_message = ""
     
-    # Path setup
-    base_dir = r"G:\My Drive\Classroom\Tính toán hiệu năng cao\Báo cáo"
-    scripts_dir = os.path.join(base_dir, "Scripts")
-    data_path = os.path.join(base_dir, "Data", config.dataset)
+    # Path setup relative to repo root
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(backend_dir)
+    scripts_dir = os.path.join(repo_dir, "scripts")
+    data_path = os.path.join(repo_dir, "data", config.dataset)
     
     # Build execution command
-    # e.g., mpirun -np 4 ./nbody_mpi ../Data/galaxy_collision_10k.txt 100 0.01
     mpi_binary = os.path.join(scripts_dir, "nbody_mpi")
     if os.name == 'nt':
         mpi_binary += ".exe"
@@ -70,7 +70,7 @@ def run_simulation_worker(config: RunConfig):
     
     # Add mock hostfile configuration for multi-node simulation
     if config.nodes > 1:
-        hostfile_path = os.path.join(base_dir, "backend", "hostfile")
+        hostfile_path = os.path.join(backend_dir, "hostfile")
         try:
             with open(hostfile_path, "w") as f:
                 f.write("localhost slots=16\n") # Simplification for local run

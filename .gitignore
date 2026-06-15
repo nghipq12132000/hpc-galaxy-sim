@@ -1,0 +1,12 @@
+# Compiled binaries
+scripts/nbody_seq
+scripts/nbody_mpi
+*.exe
+*.o
+
+# Hostfiles generated dynamically by the backend
+backend/hostfile
+
+# OS generated files
+.DS_Store
+Thumbs.db

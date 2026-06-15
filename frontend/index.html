@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Galaxy Collision N-Body Visualizer</title>
+    <!-- Google Fonts: Orbitron for Sci-Fi vibe, Inter for clean UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome for control icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Three.js and OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        /* Modern Glassmorphic Dark Space CSS Styling */
+        :root {
+            --bg-color: #030712;
+            --panel-bg: rgba(17, 24, 39, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --cyan-accent: #06b6d4;
+            --cyan-glow: rgba(6, 182, 212, 0.4);
+            --orange-accent: #f97316;
+            --orange-glow: rgba(249, 115, 22, 0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+        }
+
+        #webgl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Glass Panel Styling */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            z-index: 10;
+            position: absolute;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        /* HUD Header */
+        header.glass-panel {
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: 2px;
+            background: linear-gradient(to right, #22d3ee, #e0f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        header .subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        /* Side Control Panel */
+        #control-panel {
+            top: 100px;
+            left: 20px;
+            width: 320px;
+            max-height: calc(100% - 240px);
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Info & Stats Panel */
+        #stats-panel {
+            top: 100px;
+            right: 20px;
+            width: 280px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Playback Timeline Controller */
+        #timeline-panel {
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Card Section Titles */
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--cyan-accent);
+            border-left: 3px solid var(--cyan-accent);
+            padding-left: 8px;
+            margin-bottom: 5px;
+        }
+
+        /* File Upload Area */
+        #drop-zone {
+            border: 2px dashed rgba(6, 182, 212, 0.3);
+            border-radius: 8px;
+            padding: 20px 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(6, 182, 212, 0.02);
+        }
+
+        #drop-zone:hover, #drop-zone.dragover {
+            border-color: var(--cyan-accent);
+            background: rgba(6, 182, 212, 0.08);
+            box-shadow: 0 0 10px var(--cyan-glow);
+        }
+
+        #drop-zone i {
+            font-size: 1.8rem;
+            color: var(--cyan-accent);
+            margin-bottom: 8px;
+        }
+
+        #drop-zone p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Custom Input Sliders */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .control-val {
+            color: var(--cyan-accent);
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--cyan-accent);
+            cursor: pointer;
+            box-shadow: 0 0 6px var(--cyan-glow);
+            transition: transform 0.1s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Button Styling */
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-accent {
+            background: var(--cyan-accent);
+            border: none;
+            color: #000;
+            font-weight: 600;
+            box-shadow: 0 0 10px var(--cyan-glow);
+        }
+
+        .btn-accent:hover {
+            background: #22d3ee;
+            box-shadow: 0 0 15px var(--cyan-accent);
+            transform: translateY(-1px);
+        }
+
+        /* Timeline Controls */
+        #timeline-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .media-btn {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .media-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--cyan-accent);
+        }
+
+        .media-btn-large {
+            font-size: 1.4rem;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #timeline-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-grow: 1;
+        }
+
+        /* Stats List */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            padding: 10px;
+        }
+
+        .stat-label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* Toggle Math Panel Overlay */
+        #physics-math-card {
+            display: none;
+            bottom: 110px;
+            right: 20px;
+            width: 340px;
+            padding: 20px;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        #physics-math-card p {
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        #physics-math-card code {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 4px;
+            border-radius: 4px;
+            color: #a7f3d0;
+        }
+
+        .math-equation {
+            text-align: center;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #34d399;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px;
+            border-radius: 6px;
+            margin: 8px 0;
+            border-left: 2px solid #34d399;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Gauges inside Stats Panel */
+        .monitor-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 6px;
+            padding: 6px 2px;
+        }
+        .gauge-label {
+            font-size: 0.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        .gauge-circle {
+            position: relative;
+            width: 38px;
+            height: 38px;
+        }
+        .gauge-circle svg {
+            width: 38px;
+            height: 38px;
+            transform: rotate(-90deg);
+        }
+        .gauge-circle circle {
+            fill: none;
+            stroke-width: 3.5;
+        }
+        .gauge-circle .bg-ring {
+            stroke: rgba(255, 255, 255, 0.1);
+        }
+        .gauge-circle .fill-ring {
+            stroke: var(--cyan-accent);
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.3s ease;
+        }
+        .gauge-val {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.55rem;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Three.js Canvas Container -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- Header Panel -->
+    <header class="glass-panel">
+        <div>
+            <h1><i class="fa-solid fa-circle-nodes"></i> N-BODY GALAXY COLLISION</h1>
+            <div class="subtitle">High Performance Computing Project Visualizer</div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" id="btn-cinematic" onclick="toggleCinematicMode()"><i class="fa-solid fa-video"></i> Fly-Through Mode</button>
+            <button class="btn" onclick="toggleMathCard()"><i class="fa-solid fa-calculator"></i> Physics Math</button>
+            <button class="btn btn-accent" id="mode-badge">DEMO MODE</button>
+        </div>
+    </header>
+
+    <!-- Sidebar Control Panel -->
+    <div id="control-panel" class="glass-panel">
+        
+        <!-- File Loading Section -->
+        <div class="control-group">
+            <div class="section-title">Data Source</div>
+            <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>Drag & drop C++ output (.txt)</p>
+                <p style="font-size: 0.65rem; margin-top: 4px;">Or click to browse</p>
+                <input type="file" id="file-input" class="hidden" accept=".txt">
+            </div>
+            <button class="btn" id="reset-demo-btn" onclick="loadDemoMode()"><i class="fa-solid fa-rotate-left"></i> Switch back to Demo Mode</button>
+        </div>
+
+        <!-- Particle Visualization Settings -->
+        <div class="control-group">
+            <div class="section-title">Visualization</div>
+            
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Star Point Size</span>
+                    <span id="lbl-star-size" class="control-val">1.2</span>
+                </div>
+                <input type="range" id="slider-star-size" min="0.2" max="5.0" step="0.1" value="1.2">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Camera Rotation</span>
+                    <span id="lbl-camera-rot" class="control-val">0.05</span>
+                </div>
+                <input type="range" id="slider-camera-rot" min="0.0" max="0.5" step="0.01" value="0.05">
+            </div>
+
+            <div class="control-group" style="flex-direction: row; justify-content: space-between; align-items: center; margin-top: 5px;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">Render Galaxy Centers</span>
+                <input type="checkbox" id="chk-render-centers" checked style="accent-color: var(--cyan-accent); width: 16px; height: 16px; cursor: pointer;">
+            </div>
+        </div>
+
+        <!-- Physics Physics Tuning (Demo Only) -->
+        <div class="control-group" id="demo-physics-controls">
+            <div class="section-title">Physics Params (Demo)</div>
+            
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Star Count (N)</span>
+                    <span id="lbl-demo-n" class="control-val">1000</span>
+                </div>
+                <input type="range" id="slider-demo-n" min="200" max="2000" step="100" value="1000">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Softening (ε)</span>
+                    <span id="lbl-demo-epsilon" class="control-val">0.8</span>
+                </div>
+                <input type="range" id="slider-demo-epsilon" min="0.1" max="2.0" step="0.1" value="0.8">
+            </div>
+            
+            <button class="btn btn-accent" onclick="recalculateDemo()" style="margin-top: 5px;"><i class="fa-solid fa-gears"></i> Re-simulate Demo</button>
+        </div>
+
+        <!-- MPI Cluster Settings (FastAPI BE) -->
+        <div class="control-group">
+            <div class="section-title">MPI Cluster Settings</div>
+            
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Processes (p)</span>
+                    <span id="lbl-mpi-procs" class="control-val">4</span>
+                </div>
+                <input type="range" id="slider-mpi-procs" min="1" max="16" step="1" value="4">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Compute Nodes</span>
+                    <span id="lbl-mpi-nodes" class="control-val">2</span>
+                </div>
+                <input type="range" id="slider-mpi-nodes" min="1" max="4" step="1" value="2">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Dataset</span>
+                </div>
+                <select id="select-mpi-dataset" class="btn" style="width: 100%; text-align: left; background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <option value="galaxy_collision_10k.txt">galaxy_collision_10k.txt (10k)</option>
+                    <option value="galaxy_collision_20k.txt">galaxy_collision_20k.txt (20k)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>Steps</span>
+                    <span id="lbl-mpi-steps" class="control-val">100</span>
+                </div>
+                <input type="range" id="slider-mpi-steps" min="50" max="500" step="50" value="100">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 5px;">
+                <button class="btn btn-accent" id="btn-mpi-run" onclick="runMpiSimulation()"><i class="fa-solid fa-play"></i> Run MPI</button>
+                <button class="btn" id="btn-mpi-stop" onclick="stopMpiSimulation()" disabled><i class="fa-solid fa-stop"></i> Stop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Panel -->
+    <div id="stats-panel" class="glass-panel">
+        <div class="section-title">Real-Time Stats</div>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <div class="stat-label">Total Particles</div>
+                <div class="stat-val" id="stat-particles">1,000</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Render FPS</div>
+                <div class="stat-val" id="stat-fps">60.0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Current Step</div>
+                <div class="stat-val" id="stat-step">0 / 250</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Simulation Time</div>
+                <div class="stat-val" id="stat-sim-time">0.00s</div>
+            </div>
+        </div>
+        
+        <div class="control-group" style="margin-top: 5px;">
+            <div class="control-label">
+                <span>Simulation Status</span>
+            </div>
+            <span id="lbl-status" style="font-size: 0.75rem; font-weight: 500; color: #34d399;"><i class="fa-solid fa-circle-dot"></i> Idle</span>
+        </div>
+
+        <!-- Cluster Resources Monitor -->
+        <div class="control-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+            <div class="section-title">Cluster Monitor</div>
+            <div class="monitor-grid">
+                <div class="gauge-container">
+                    <span class="gauge-label">Master</span>
+                    <div class="gauge-circle">
+                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-master" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
+                        <span class="gauge-val" id="val-master">0%</span>
+                    </div>
+                </div>
+                <div class="gauge-container">
+                    <span class="gauge-label">Node 1</span>
+                    <div class="gauge-circle">
+                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node1" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
+                        <span class="gauge-val" id="val-node1">0%</span>
+                    </div>
+                </div>
+                <div class="gauge-container">
+                    <span class="gauge-label">Node 2</span>
+                    <div class="gauge-circle">
+                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node2" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
+                        <span class="gauge-val" id="val-node2">0%</span>
+                    </div>
+                </div>
+                <div class="gauge-container">
+                    <span class="gauge-label">Node 3</span>
+                    <div class="gauge-circle">
+                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node3" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
+                        <span class="gauge-val" id="val-node3">0%</span>
+                    </div>
+                </div>
+                <div class="gauge-container">
+                    <span class="gauge-label">Node 4</span>
+                    <div class="gauge-circle">
+                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node4" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
+                        <span class="gauge-val" id="val-node4">0%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-label" style="margin-top: 8px;">
+                <span>MPI Network Traffic</span>
+                <span id="stat-mpi-traffic" class="control-val">0.0 MB/s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Timeline scrub controller -->
+    <div id="timeline-panel" class="glass-panel">
+        <div id="timeline-slider-container">
+            <span style="font-size: 0.7rem; font-family: 'Orbitron', sans-serif;" id="timeline-min-frame">0</span>
+            <input type="range" id="timeline-slider" min="0" max="249" value="0" style="flex-grow: 1;">
+            <span style="font-size: 0.7rem; font-family: 'Orbitron', sans-serif;" id="timeline-max-frame">249</span>
+        </div>
+
+        <div id="timeline-controls">
+            <button class="media-btn" id="btn-prev-frame" onclick="stepBackward()"><i class="fa-solid fa-backward-step"></i></button>
+            <button class="media-btn media-btn-large" id="btn-play-pause" onclick="togglePlayPause()"><i class="fa-solid fa-play"></i></button>
+            <button class="media-btn" id="btn-next-frame" onclick="stepForward()"><i class="fa-solid fa-forward-step"></i></button>
+            
+            <div style="width: 1px; height: 20px; background: rgba(255, 255, 255, 0.1); margin: 0 10px;"></div>
+
+            <div class="control-group" style="flex-direction: row; align-items: center; gap: 10px;">
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">Playback Speed</span>
+                <input type="range" id="slider-play-speed" min="1" max="10" step="1" value="3" style="width: 100px;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Math Panel Overlay -->
+    <div id="physics-math-card" class="glass-panel">
+        <div class="section-title" style="margin-bottom: 12px;">Galaxy Collision Physics</div>
+        <p>This simulation integrates Newton's Law of Universal Gravitation between all stars. Acceleration of star <code>i</code> is given by:</p>
+        <div class="math-equation">
+            a_i = G * Σ [ (m_j * (r_j - r_i)) / (|r_j - r_i|^2 + ε^2)^(3/2) ]
+        </div>
+        <p>where <code>G = 6.674e-11</code>, and <code>ε</code> is a softening factor to prevent numerical singularities during close star encounters.</p>
+        
+        <div class="section-title" style="margin-top: 15px; margin-bottom: 12px;">MPI Communication Pattern</div>
+        <p>In the C++ MPI implementation, coordinates of local stars are shared across nodes using collective gathering:</p>
+        <div class="math-equation">
+            MPI_Allgatherv(local_x, local_count, ...)
+        </div>
+        <p>Every rank holds the full set of particle positions, dividing the force calculation loop into slices for perfect load-balancing.</p>
+    </div>
+
+    <script>
+        // --- WebGL & Three.js Globals ---
+        let scene, camera, renderer, controls;
+        
+        // Split Particle Meshes for Cinematic Visualization
+        let normalStarsGeometry, normalStarsMaterial, normalPoints;
+        let brightStarsGeometry, brightStarsMaterial, brightPoints;
+        let galaxyCentersGeometry, galaxyCentersMaterial, galaxyCenterPoints;
+        
+        // Volumetric Nebula Gas Cloud Layers
+        let nebulaStarsGeometry, nebulaStarsMaterial, nebulaPoints;
+        
+        let isBrightArray = []; // Boolean mask of size N, true for bright stars
+        
+        // --- Simulation State ---
+        let frames = [];          // Array of Float32Array storing particle coordinates [x, y, z, x, y, z...]
+        let currentFrameIndex = 0;
+        let isPlaying = false;
+        let isDemoMode = true;
+        let particleCount = 1000;
+        let playInterval = null;
+
+        // UI Slider references
+        const timelineSlider = document.getElementById('timeline-slider');
+        const playPauseBtn = document.getElementById('btn-play-pause');
+        const starSizeSlider = document.getElementById('slider-star-size');
+        const cameraRotSlider = document.getElementById('slider-camera-rot');
+        const renderCentersChk = document.getElementById('chk-render-centers');
+        
+        // FPS calculator variables
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fps = 60.0;
+
+        // --- Initialize Visualizer ---
+        function init() {
+            // Scene & Renderer
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x020208, 0.0015);
+            
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl-canvas'), antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            // Create a gorgeous colorful space nebula background texture dynamically
+            const bgCanvas = document.createElement('canvas');
+            bgCanvas.width = 512;
+            bgCanvas.height = 512;
+            const bgCtx = bgCanvas.getContext('2d');
+            
+            // Deep radial background gradient
+            const bgGrad = bgCtx.createRadialGradient(256, 256, 0, 256, 256, 360);
+            bgGrad.addColorStop(0, '#09051c'); // Deep cosmic purple
+            bgGrad.addColorStop(0.4, '#03020c'); // Very dark blue
+            bgGrad.addColorStop(1, '#000002'); // Black edge
+            bgCtx.fillStyle = bgGrad;
+            bgCtx.fillRect(0, 0, 512, 512);
+
+            // Add soft colorful nebula gas clouds in the background
+            bgCtx.fillStyle = 'rgba(76, 29, 149, 0.07)'; // Purple cloud
+            bgCtx.beginPath(); bgCtx.arc(120, 120, 220, 0, Math.PI * 2); bgCtx.fill();
+            bgCtx.fillStyle = 'rgba(6, 182, 212, 0.05)'; // Cyan cloud
+            bgCtx.beginPath(); bgCtx.arc(380, 380, 260, 0, Math.PI * 2); bgCtx.fill();
+            bgCtx.fillStyle = 'rgba(236, 72, 153, 0.04)'; // Pink cloud
+            bgCtx.beginPath(); bgCtx.arc(420, 100, 180, 0, Math.PI * 2); bgCtx.fill();
+
+            const bgTexture = new THREE.Texture(bgCanvas);
+            bgTexture.needsUpdate = true;
+            scene.background = bgTexture;
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2500);
+            camera.position.set(0, 110, 160);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 700;
+            controls.minDistance = 10;
+
+            // Generate textures
+            const normalStarTexture = createStarTexture('normal');
+            const brightStarTexture = createStarTexture('bright');
+            const coreGlowTexture = createStarTexture('core');
+
+            // Setup Materials
+            normalStarsMaterial = new THREE.PointsMaterial({
+                size: parseFloat(starSizeSlider.value),
+                vertexColors: true,
+                map: normalStarTexture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.95
+            });
+
+            brightStarsMaterial = new THREE.PointsMaterial({
+                size: parseFloat(starSizeSlider.value) * 3.2, // Cinematic flares are larger
+                vertexColors: true,
+                map: brightStarTexture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 1.0
+            });
+
+            // Volumetric gas cloud layers (Nebula dust)
+            nebulaStarsMaterial = new THREE.PointsMaterial({
+                size: parseFloat(starSizeSlider.value) * 16.0, // Gas clouds are very large
+                vertexColors: true,
+                map: coreGlowTexture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.15 // Soft blending opacity
+            });
+
+            // Large glowing gas clouds at centers
+            galaxyCentersMaterial = new THREE.PointsMaterial({
+                size: parseFloat(starSizeSlider.value) * 50.0, // Large core glow
+                vertexColors: true,
+                map: coreGlowTexture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.7 // Very bright galaxy core bulges
+            });
+
+            // Resize listener
+            window.addEventListener('resize', onWindowResize);
+            
+            // Setup Drag & Drop files
+            setupDragAndDrop();
+
+            // Run Demo Mode simulation
+            loadDemoMode();
+
+            // Start Animation Loop
+            animate();
+        }
+
+        // --- Custom Star Texture Generator (Glow circle) ---
+        function createStarTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+
+            if (type === 'core') {
+                // Large fuzzy gas core glow (Nebula effect)
+                const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+                grad.addColorStop(0.2, 'rgba(147, 51, 234, 0.25)'); // Rich purple gas
+                grad.addColorStop(0.6, 'rgba(59, 130, 246, 0.08)'); // Blue gas halo
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 64, 64);
+            } else if (type === 'bright') {
+                // Cinematic bright star with 4-point lens flare diffraction spikes (Hubble style)
+                const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 12);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                grad.addColorStop(0.15, 'rgba(255, 255, 255, 0.95)');
+                grad.addColorStop(0.35, 'rgba(147, 51, 234, 0.45)'); // Purple outer flare corona
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(32, 32, 32, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw lens flare spikes with smooth gradient transparent falloff
+                const spikeGradH = ctx.createLinearGradient(4, 32, 60, 32);
+                spikeGradH.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                spikeGradH.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
+                spikeGradH.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.strokeStyle = spikeGradH;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(4, 32); ctx.lineTo(60, 32);
+                ctx.stroke();
+
+                const spikeGradV = ctx.createLinearGradient(32, 4, 32, 60);
+                spikeGradV.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                spikeGradV.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
+                spikeGradV.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.strokeStyle = spikeGradV;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(32, 4); ctx.lineTo(32, 60);
+                ctx.stroke();
+
+                // Soft glowing diffraction cross rays
+                const glowGradH = ctx.createLinearGradient(16, 32, 48, 32);
+                glowGradH.addColorStop(0, 'rgba(236, 72, 153, 0)'); // Pink glow
+                glowGradH.addColorStop(0.5, 'rgba(236, 72, 153, 0.45)');
+                glowGradH.addColorStop(1, 'rgba(236, 72, 153, 0)');
+                ctx.strokeStyle = glowGradH;
+                ctx.lineWidth = 3.5;
+                ctx.beginPath();
+                ctx.moveTo(16, 32); ctx.lineTo(48, 32);
+                ctx.stroke();
+
+                const glowGradV = ctx.createLinearGradient(32, 16, 32, 48);
+                glowGradV.addColorStop(0, 'rgba(6, 182, 212, 0)'); // Cyan glow
+                glowGradV.addColorStop(0.5, 'rgba(6, 182, 212, 0.45)');
+                glowGradV.addColorStop(1, 'rgba(6, 182, 212, 0)');
+                ctx.strokeStyle = glowGradV;
+                ctx.lineWidth = 3.5;
+                ctx.beginPath();
+                ctx.moveTo(32, 16); ctx.lineTo(32, 48);
+                ctx.stroke();
+            } else {
+                // Standard glowing star (radial falloff with soft warm halo)
+                const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 24);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                grad.addColorStop(0.15, 'rgba(255, 255, 255, 0.95)');
+                grad.addColorStop(0.4, 'rgba(192, 132, 252, 0.4)'); // Purple glow corona
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 64, 64);
+            }
+
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        // --- N-Body Mathematics Integration (Client-Side JS Engine) ---
+        function runNBodySolver(n, epsilon, totalSteps, dt) {
+            const G = 1.0; // Scaled gravitational constant for visual speed
+            const halfN = Math.floor(n / 2);
+            
+            // Allocate particles
+            const x = new Float32Array(n);
+            const y = new Float32Array(n);
+            const z = new Float32Array(n);
+            const vx = new Float32Array(n);
+            const vy = new Float32Array(n);
+            const vz = new Float32Array(n);
+            const mass = new Float32Array(n);
+
+            // Galaxy centers initial states (Pre-calculated mutual swing-by orbit)
+            const centers_x1 = new Float32Array(totalSteps);
+            const centers_y1 = new Float32Array(totalSteps);
+            const centers_z1 = new Float32Array(totalSteps);
+            const centers_x2 = new Float32Array(totalSteps);
+            const centers_y2 = new Float32Array(totalSteps);
+            const centers_z2 = new Float32Array(totalSteps);
+
+            const g1_cx = -50.0, g1_cy = 0.0, g1_cz = 0.0;
+            const g1_cvx = 3.2, g1_cvy = 0.6, g1_cvz = 0.0; // Small transverse velocity for swing-by
+            const g1_mass = 22000.0;
+
+            const g2_cx = 50.0, g2_cy = 0.0, g2_cz = 0.0;
+            const g2_cvx = -3.2, g2_cvy = -0.6, g2_cvz = 0.0;
+            const g2_mass = 22000.0;
+
+            // Step 1: Pre-calculate the trajectory of the two supermassive centers
+            let cx1 = g1_cx, cy1 = g1_cy, cz1 = g1_cz;
+            let cvx1 = g1_cvx, cvy1 = g1_cvy, cvz1 = g1_cvz;
+            let cx2 = g2_cx, cy2 = g2_cy, cz2 = g2_cz;
+            let cvx2 = g2_cvx, cvy2 = g2_cvy, cvz2 = g2_cvz;
+
+            const sub_dt_centers = dt / 12.0; // 12 sub-steps for perfect central orbit integration
+            for (let step = 0; step < totalSteps; step++) {
+                for (let substep = 0; substep < 12; substep++) {
+                    const dx = cx2 - cx1;
+                    const dy = cy2 - cy1;
+                    const dz = cz2 - cz1;
+                    const distSqr = dx*dx + dy*dy + dz*dz + 4.0;
+                    const dist = Math.sqrt(distSqr);
+                    const force = (G * g1_mass * g2_mass) / (distSqr * dist);
+
+                    const ax1 = (force * dx) / g1_mass;
+                    const ay1 = (force * dy) / g1_mass;
+                    const az1 = (force * dz) / g1_mass;
+
+                    const ax2 = (-force * dx) / g2_mass;
+                    const ay2 = (-force * dy) / g2_mass;
+                    const az2 = (-force * dz) / g2_mass;
+
+                    cvx1 += ax1 * sub_dt_centers; cvy1 += ay1 * sub_dt_centers; cvz1 += az1 * sub_dt_centers;
+                    cvx2 += ax2 * sub_dt_centers; cvy2 += ay2 * sub_dt_centers; cvz2 += az2 * sub_dt_centers;
+
+                    cx1 += cvx1 * sub_dt_centers; cy1 += cvy1 * sub_dt_centers; cz1 += cvz1 * sub_dt_centers;
+                    cx2 += cvx2 * sub_dt_centers; cy2 += cvy2 * sub_dt_centers; cz2 += cvz2 * sub_dt_centers;
+                }
+                centers_x1[step] = cx1; centers_y1[step] = cy1; centers_z1[step] = cz1;
+                centers_x2[step] = cx2; centers_y2[step] = cy2; centers_z2[step] = cz2;
+            }
+
+            // Seedable RNG for reproducibility
+            let seed = 42;
+            function rand() {
+                let x = Math.sin(seed++) * 10000;
+                return x - Math.floor(x);
+            }
+
+            // Step 2: Initialize stars in stable Keplerian orbits around their respective centers
+            for (let i = 0; i < n; i++) {
+                let cx, cy, cz, cvx, cvy, cvz, cent_mass;
+                if (i < halfN) {
+                    cx = g1_cx; cy = g1_cy; cz = g1_cz;
+                    cvx = g1_cvx; cvy = g1_cvy; cvz = g1_cvz;
+                    cent_mass = g1_mass;
+                } else {
+                    cx = g2_cx; cy = g2_cy; cz = g2_cz;
+                    cvx = g2_cvx; cvy = g2_cvy; cvz = g2_cvz;
+                    cent_mass = g2_mass;
+                }
+
+                if (i === 0) {
+                    x[i] = g1_cx; y[i] = g1_cy; z[i] = g1_cz;
+                    vx[i] = g1_cvx; vy[i] = g1_cvy; vz[i] = g1_cvz;
+                    mass[i] = g1_mass;
+                } else if (i === halfN) {
+                    x[i] = g2_cx; y[i] = g2_cy; z[i] = g2_cz;
+                    vx[i] = g2_cvx; vy[i] = g2_cvy; vz[i] = g2_cvz;
+                    mass[i] = g2_mass;
+                } else {
+                    const r = 5.0 + rand() * 25.0;
+                    const theta = rand() * 2.0 * Math.PI;
+                    const v_orbit = Math.sqrt((G * cent_mass) / r);
+
+                    x[i] = cx + r * Math.cos(theta);
+                    y[i] = cy + r * Math.sin(theta);
+                    z[i] = cz + (rand() * 2.0 - 1.0) * 1.5;
+
+                    vx[i] = cvx - v_orbit * Math.sin(theta);
+                    vy[i] = cvy + v_orbit * Math.cos(theta);
+                    vz[i] = cvz + (rand() * 2.0 - 1.0) * 0.05;
+
+                    mass[i] = 10.0 + rand() * 90.0;
+                }
+            }
+
+            const solverFrames = [];
+
+            // Step 3: Run the simulation using a highly-stable Restricted 3-Body (star feels both centers) solver
+            const sub_dt_stars = dt / 6.0; // 6 substeps per frame for star orbit stability
+            for (let step = 0; step < totalSteps; step++) {
+                const cx1 = centers_x1[step];
+                const cy1 = centers_y1[step];
+                const cz1 = centers_z1[step];
+                const cx2 = centers_x2[step];
+                const cy2 = centers_y2[step];
+                const cz2 = centers_z2[step];
+
+                for (let substep = 0; substep < 6; substep++) {
+                    for (let i = 0; i < n; i++) {
+                        if (i === 0 || i === halfN) continue; // Centers are pre-calculated
+
+                        // Attraction to Center 1
+                        const dx1 = cx1 - x[i];
+                        const dy1 = cy1 - y[i];
+                        const dz1 = cz1 - z[i];
+                        const distSqr1 = dx1*dx1 + dy1*dy1 + dz1*dz1 + epsilon*epsilon;
+                        const force1 = (G * g1_mass) / (distSqr1 * Math.sqrt(distSqr1));
+
+                        // Attraction to Center 2
+                        const dx2 = cx2 - x[i];
+                        const dy2 = cy2 - y[i];
+                        const dz2 = cz2 - z[i];
+                        const distSqr2 = dx2*dx2 + dy2*dy2 + dz2*dz2 + epsilon*epsilon;
+                        const force2 = (G * g2_mass) / (distSqr2 * Math.sqrt(distSqr2));
+
+                        // Update velocities (Verlet-like acceleration step)
+                        vx[i] += (force1 * dx1 + force2 * dx2) * sub_dt_stars;
+                        vy[i] += (force1 * dy1 + force2 * dy2) * sub_dt_stars;
+                        vz[i] += (force1 * dz1 + force2 * dz2) * sub_dt_stars;
+
+                        // Update positions
+                        x[i] += vx[i] * sub_dt_stars;
+                        y[i] += vy[i] * sub_dt_stars;
+                        z[i] += vz[i] * sub_dt_stars;
+                    }
+                }
+
+                // Pack coordinates for this frame
+                const frameCoords = new Float32Array(n * 3);
+                for (let i = 0; i < n; i++) {
+                    if (i === 0) {
+                        frameCoords[0] = cx1; frameCoords[1] = cy1; frameCoords[2] = cz1;
+                    } else if (i === halfN) {
+                        frameCoords[halfN * 3] = cx2; frameCoords[halfN * 3 + 1] = cy2; frameCoords[halfN * 3 + 2] = cz2;
+                    } else {
+                        frameCoords[i * 3] = x[i];
+                        frameCoords[i * 3 + 1] = y[i];
+                        frameCoords[i * 3 + 2] = z[i];
+                    }
+                }
+                solverFrames.push(frameCoords);
+            }
+
+            return solverFrames;
+        }
+
+        // --- Demo Simulation Trigger ---
+        function loadDemoMode() {
+            document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Simulating Galaxy collision...';
+            
+            // Allow DOM to render loading text
+            setTimeout(() => {
+                const demoN = parseInt(document.getElementById('slider-demo-n').value);
+                const demoEps = parseFloat(document.getElementById('slider-demo-epsilon').value);
+                
+                isDemoMode = true;
+                particleCount = demoN;
+                frames = runNBodySolver(particleCount, demoEps, 250, 0.15);
+                
+                currentFrameIndex = 0;
+                
+                // Update interface controls
+                document.getElementById('mode-badge').innerText = "DEMO MODE";
+                document.getElementById('mode-badge').style.background = "var(--cyan-accent)";
+                document.getElementById('mode-badge').style.boxShadow = "0 0 10px var(--cyan-glow)";
+                document.getElementById('reset-demo-btn').classList.add('hidden');
+                document.getElementById('demo-physics-controls').classList.remove('hidden');
+                
+                initOrUpdateParticleMesh();
+                updateTimelineControls();
+                renderFrame(0);
+                
+                document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-circle-check"></i> Demo Ready';
+            }, 50);
+        }
+
+        function recalculateDemo() {
+            loadDemoMode();
+        }
+
+        // --- Setup Point Cloud Mesh into Three.js Scene ---
+        function initOrUpdateParticleMesh() {
+            // Remove existing Points from scene if they exist
+            if (normalPoints) scene.remove(normalPoints);
+            if (brightPoints) scene.remove(brightPoints);
+            if (nebulaPoints) scene.remove(nebulaPoints);
+            if (galaxyCenterPoints) scene.remove(galaxyCenterPoints);
+            
+            if (normalStarsGeometry) normalStarsGeometry.dispose();
+            if (brightStarsGeometry) brightStarsGeometry.dispose();
+            if (nebulaStarsGeometry) nebulaStarsGeometry.dispose();
+            if (galaxyCentersGeometry) galaxyCentersGeometry.dispose();
+
+            // Set up isBright mask array
+            isBrightArray = [];
+            let normalCount = 0;
+            let brightCount = 0;
+            
+            for (let i = 0; i < particleCount; i++) {
+                // Star 0 and star halfN (black holes) are always treated as center bulges, not regular stars
+                const halfN = Math.floor(particleCount / 2);
+                if (i === 0 || i === halfN) {
+                    isBrightArray.push(false);
+                    continue;
+                }
+                
+                // 10% are bright flare stars
+                const bright = (i % 10 === 0);
+                isBrightArray.push(bright);
+                if (bright) brightCount++;
+                else normalCount++;
+            }
+
+            normalStarsGeometry = new THREE.BufferGeometry();
+            brightStarsGeometry = new THREE.BufferGeometry();
+            nebulaStarsGeometry = new THREE.BufferGeometry();
+            galaxyCentersGeometry = new THREE.BufferGeometry();
+
+            const normalPos = new Float32Array(normalCount * 3);
+            const normalCol = new Float32Array(normalCount * 3);
+            const brightPos = new Float32Array(brightCount * 3);
+            const brightCol = new Float32Array(brightCount * 3);
+            
+            // Volumetric gas coordinates and colors (Nebula dust cloud)
+            const nebulaPos = new Float32Array(particleCount * 3);
+            const nebulaCol = new Float32Array(particleCount * 3);
+
+            // Split particles and calculate radial color gradient
+            const halfN = Math.floor(particleCount / 2);
+            const initialFrame = frames[0];
+            
+            let normalIdx = 0;
+            let brightIdx = 0;
+
+            for (let i = 0; i < particleCount; i++) {
+                if (i === 0 || i === halfN) continue; // Skip core black holes in regular meshes
+
+                // Find initial distance from galaxy center
+                const initX = initialFrame[i * 3];
+                const initY = initialFrame[i * 3 + 1];
+                const initZ = initialFrame[i * 3 + 2];
+                
+                let cx = (i < halfN) ? -50.0 : 50.0;
+                let dx = initX - cx;
+                let dy = initY;
+                let dz = initZ;
+                let r = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+                // Assign cosmic color temperature
+                let r_col, g_col, b_col;
+                const jitter = (Math.sin(i * 17) * 0.5 + 0.5) * 0.2; // Jitter to make it organic
+
+                if (i < halfN) {
+                    // Galaxy 1 Colors (Cyan/Electric Blue/Magenta/Purple Theme)
+                    if (r < 7.0) {
+                        r_col = 1.0; g_col = 0.98; b_col = 0.95; // Warm dense core
+                    } else if (r < 16.0) {
+                        r_col = 0.0; g_col = 0.9 + jitter; b_col = 1.0; // Neon Cyan
+                    } else if (r < 23.0) {
+                        r_col = 0.1; g_col = 0.35; b_col = 1.0; // Electric Blue
+                    } else {
+                        r_col = 0.75 + jitter; g_col = 0.1; b_col = 1.0; // Hot Purple/Pink outer
+                    }
+                } else {
+                    // Galaxy 2 Colors (Gold/Neon Pink/Magenta/Deep Red Theme)
+                    if (r < 7.0) {
+                        r_col = 1.0; g_col = 0.98; b_col = 0.95; // Warm dense core
+                    } else if (r < 15.0) {
+                        r_col = 1.0; g_col = 0.75 + jitter; b_col = 0.0; // Bright Gold
+                    } else if (r < 22.0) {
+                        r_col = 1.0; g_col = 0.0; b_col = 0.65 + jitter; // Hot Pink/Magenta
+                    } else {
+                        r_col = 1.0; g_col = 0.0; b_col = 0.25; // Ruby Red outer
+                    }
+                }
+
+                // Nebula gas gets highly saturated colors for glowing dust clouds
+                nebulaCol[i * 3] = r_col;
+                nebulaCol[i * 3 + 1] = g_col;
+                nebulaCol[i * 3 + 2] = b_col;
+
+                if (isBrightArray[i]) {
+                    brightCol[brightIdx * 3] = r_col;
+                    brightCol[brightIdx * 3 + 1] = g_col;
+                    brightCol[brightIdx * 3 + 2] = b_col;
+                    brightIdx++;
+                } else {
+                    normalCol[normalIdx * 3] = r_col;
+                    normalCol[normalIdx * 3 + 1] = g_col;
+                    normalCol[normalIdx * 3 + 2] = b_col;
+                    normalIdx++;
+                }
+            }
+
+            normalStarsGeometry.setAttribute('position', new THREE.BufferAttribute(normalPos, 3));
+            normalStarsGeometry.setAttribute('color', new THREE.BufferAttribute(normalCol, 3));
+            normalPoints = new THREE.Points(normalStarsGeometry, normalStarsMaterial);
+            scene.add(normalPoints);
+
+            brightStarsGeometry.setAttribute('position', new THREE.BufferAttribute(brightPos, 3));
+            brightStarsGeometry.setAttribute('color', new THREE.BufferAttribute(brightCol, 3));
+            brightPoints = new THREE.Points(brightStarsGeometry, brightStarsMaterial);
+            scene.add(brightPoints);
+            
+            // Nebula gas cloud layer setup
+            nebulaStarsGeometry.setAttribute('position', new THREE.BufferAttribute(nebulaPos, 3));
+            nebulaStarsGeometry.setAttribute('color', new THREE.BufferAttribute(nebulaCol, 3));
+            nebulaPoints = new THREE.Points(nebulaStarsGeometry, nebulaStarsMaterial);
+            scene.add(nebulaPoints);
+
+            // Set up large central galactic bulges (Core Glow)
+            const centerPositions = new Float32Array(2 * 3);
+            const centerColors = new Float32Array([
+                0.0, 0.9, 1.0,  // Galaxy 1 Core Gas: Neon Cyan
+                1.0, 0.6, 0.1   // Galaxy 2 Core Gas: Neon Orange
+            ]);
+            galaxyCentersGeometry.setAttribute('position', new THREE.BufferAttribute(centerPositions, 3));
+            galaxyCentersGeometry.setAttribute('color', new THREE.BufferAttribute(centerColors, 3));
+            galaxyCenterPoints = new THREE.Points(galaxyCentersGeometry, galaxyCentersMaterial);
+            scene.add(galaxyCenterPoints);
+
+            document.getElementById('stat-particles').innerText = particleCount.toLocaleString();
+        }
+
+        // --- Render Specific Frame Index ---
+        function renderFrame(index) {
+            if (!frames[index]) return;
+            currentFrameIndex = index;
+            
+            const frameCoords = frames[index];
+            
+            // Temporary arrays to copy coordinates
+            const normalPosAttr = normalStarsGeometry.getAttribute('position');
+            const brightPosAttr = brightStarsGeometry.getAttribute('position');
+            const nebulaPosAttr = nebulaStarsGeometry.getAttribute('position');
+            
+            const normalPos = normalPosAttr.array;
+            const brightPos = brightPosAttr.array;
+            const nebulaPos = nebulaPosAttr.array;
+            
+            let normalIdx = 0;
+            let brightIdx = 0;
+            const halfN = Math.floor(particleCount / 2);
+
+            for (let i = 0; i < particleCount; i++) {
+                const x = frameCoords[i * 3];
+                const y = frameCoords[i * 3 + 1];
+                const z = frameCoords[i * 3 + 2];
+                
+                // Gas clouds copy all coordinates
+                nebulaPos[i * 3] = x;
+                nebulaPos[i * 3 + 1] = y;
+                nebulaPos[i * 3 + 2] = z;
+
+                if (i === 0 || i === halfN) continue; // Skip cores in star fields
+
+                if (isBrightArray[i]) {
+                    brightPos[brightIdx * 3] = x;
+                    brightPos[brightIdx * 3 + 1] = y;
+                    brightPos[brightIdx * 3 + 2] = z;
+                    brightIdx++;
+                } else {
+                    normalPos[normalIdx * 3] = x;
+                    normalPos[normalIdx * 3 + 1] = y;
+                    normalPos[normalIdx * 3 + 2] = z;
+                    normalIdx++;
+                }
+            }
+
+            normalPosAttr.needsUpdate = true;
+            brightPosAttr.needsUpdate = true;
+            nebulaPosAttr.needsUpdate = true;
+
+            // 2. Update core galaxy bulges positions (black holes index 0 and index halfN)
+            const centerAttribute = galaxyCentersGeometry.getAttribute('position');
+            centerAttribute.setXYZ(0, frameCoords[0], frameCoords[1], frameCoords[2]);
+            centerAttribute.setXYZ(1, frameCoords[halfN * 3], frameCoords[halfN * 3 + 1], frameCoords[halfN * 3 + 2]);
+            centerAttribute.needsUpdate = true;
+
+            // Update UI status details
+            document.getElementById('stat-step').innerText = `${index + 1} / ${frames.length}`;
+            document.getElementById('stat-sim-time').innerText = `${(index * 0.05).toFixed(2)}s`;
+            timelineSlider.value = index;
+        }
+
+        // --- Drag & Drop Parser for C++ simulation output file ---
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            // Highlighting dropzone
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+            });
+
+            // Handle dropped files
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) handleFile(files[0]);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) handleFile(e.target.files[0]);
+            });
+        }
+
+        function handleFile(file) {
+            document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reading file...';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                parseAndLoadFile(text, file.name);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseAndLoadFile(text, filename) {
+            document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Parsing simulation frames...';
+            
+            setTimeout(() => {
+                const lines = text.split('\n');
+                const loadedFrames = [];
+                let currentCoords = [];
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line === '') continue;
+
+                    // Match line starting with '#' or 'STEP' to split frames
+                    if (line.startsWith('#') || line.startsWith('STEP')) {
+                        if (currentCoords.length > 0) {
+                            loadedFrames.push(new Float32Array(currentCoords));
+                            currentCoords = [];
+                        }
+                        continue;
+                    }
+
+                    // Parse coordinate numbers
+                    const parts = line.split(/\s+/);
+                    if (parts.length >= 3) {
+                        const x = parseFloat(parts[0]);
+                        const y = parseFloat(parts[1]);
+                        const z = parseFloat(parts[2]);
+                        if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+                            currentCoords.push(x, y, z);
+                        }
+                    }
+                }
+
+                // Push final frame remaining
+                if (currentCoords.length > 0) {
+                    loadedFrames.push(new Float32Array(currentCoords));
+                }
+
+                if (loadedFrames.length === 0) {
+                    alert("Error: No valid simulation coordinates found in file. Format should be: x y z per line, frames separated by '#' headers.");
+                    document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Load Failed';
+                    return;
+                }
+
+                // Get star count from the first frame structure
+                const totalCoords = loadedFrames[0].length;
+                const starCount = Math.floor(totalCoords / 3);
+
+                if (starCount <= 0) {
+                    alert("Error: Invalid particle count.");
+                    document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Load Failed';
+                    return;
+                }
+
+                // Check frame structure consistency
+                for (let i = 1; i < loadedFrames.length; i++) {
+                    if (loadedFrames[i].length !== totalCoords) {
+                        alert(`Warning: Frame ${i} has coordinate size mismatch. Expected ${totalCoords} coordinates but got ${loadedFrames[i].length}.`);
+                    }
+                }
+
+                // Update global state with uploaded file data
+                frames = loadedFrames;
+                particleCount = starCount;
+                isDemoMode = false;
+                currentFrameIndex = 0;
+
+                // Adjust UI controls for File Mode
+                document.getElementById('mode-badge').innerText = "BE C++ FILE";
+                document.getElementById('mode-badge').style.background = "var(--orange-accent)";
+                document.getElementById('mode-badge').style.boxShadow = "0 0 10px var(--orange-glow)";
+                document.getElementById('reset-demo-btn').classList.remove('hidden');
+                document.getElementById('demo-physics-controls').classList.add('hidden');
+
+                initOrUpdateParticleMesh();
+                updateTimelineControls();
+                renderFrame(0);
+
+                document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Loaded: ${filename}`;
+            }, 50);
+        }
+
+        // --- Timeline Controls handlers ---
+        function updateTimelineControls() {
+            timelineSlider.min = 0;
+            timelineSlider.max = frames.length - 1;
+            timelineSlider.value = 0;
+            document.getElementById('timeline-min-frame').innerText = "1";
+            document.getElementById('timeline-max-frame').innerText = frames.length;
+        }
+
+        timelineSlider.addEventListener('input', (e) => {
+            renderFrame(parseInt(e.target.value));
+        });
+
+        function togglePlayPause() {
+            if (isPlaying) {
+                pause();
+            } else {
+                play();
+            }
+        }
+
+        function play() {
+            if (frames.length === 0) return;
+            isPlaying = true;
+            playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+            
+            // Retrieve playback delay speed
+            const speedSlider = document.getElementById('slider-play-speed');
+            const playDelay = 200 / parseInt(speedSlider.value); // Milliseconds per frame step
+
+            playInterval = setInterval(() => {
+                let nextFrame = currentFrameIndex + 1;
+                if (nextFrame >= frames.length) {
+                    nextFrame = 0; // Loop simulation playback
+                }
+                renderFrame(nextFrame);
+            }, playDelay);
+        }
+
+        function pause() {
+            isPlaying = false;
+            playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
+            if (playInterval) clearInterval(playInterval);
+        }
+
+        function stepForward() {
+            pause();
+            let nextFrame = currentFrameIndex + 1;
+            if (nextFrame >= frames.length) nextFrame = 0;
+            renderFrame(nextFrame);
+        }
+
+        function stepBackward() {
+            pause();
+            let prevFrame = currentFrameIndex - 1;
+            if (prevFrame < 0) prevFrame = frames.length - 1;
+            renderFrame(prevFrame);
+        }
+
+        // Recreate interval on speed change if playing
+        document.getElementById('slider-play-speed').addEventListener('input', () => {
+            if (isPlaying) {
+                pause();
+                play();
+            }
+        });
+
+        // Update star sizes dynamically
+        starSizeSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('lbl-star-size').innerText = val.toFixed(1);
+            normalStarsMaterial.size = val;
+            brightStarsMaterial.size = val * 3.2;
+            nebulaStarsMaterial.size = val * 16.0;
+            galaxyCentersMaterial.size = val * 50.0;
+        });
+
+        // Update camera auto rotation speed
+        cameraRotSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('lbl-camera-rot').innerText = val.toFixed(2);
+        });
+
+        // Toggle Rendering centers checkbox listener
+        renderCentersChk.addEventListener('change', (e) => {
+            galaxyCenterPoints.visible = e.target.checked;
+        });
+
+        // Handle window resizing
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- Math Card Toggling overlay ---
+        function toggleMathCard() {
+            const card = document.getElementById('physics-math-card');
+            if (card.style.display === 'block') {
+                card.style.display = 'none';
+            } else {
+                card.style.display = 'block';
+            }
+        }
+
+        // --- Cinematic Fly-Through Mode ---
+        let isCinematicMode = false;
+        
+        function toggleCinematicMode() {
+            isCinematicMode = !isCinematicMode;
+            const btn = document.getElementById('btn-cinematic');
+            if (isCinematicMode) {
+                btn.innerHTML = '<i class="fa-solid fa-video-slash"></i> Exit Fly-Through';
+                btn.style.borderColor = 'var(--cyan-accent)';
+                btn.style.boxShadow = '0 0 10px var(--cyan-glow)';
+                
+                // Slow down playing speed for beautiful slow-motion flyby
+                document.getElementById('slider-play-speed').value = 2;
+                if (!isPlaying) play();
+            } else {
+                btn.innerHTML = '<i class="fa-solid fa-video"></i> Fly-Through Mode';
+                btn.style.borderColor = '';
+                btn.style.boxShadow = '';
+            }
+        }
+
+        // --- Rendering Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // FPS Counter calculation
+            const time = performance.now();
+            frameCount++;
+            if (time > lastTime + 1000) {
+                fps = (frameCount * 1000) / (time - lastTime);
+                document.getElementById('stat-fps').innerText = fps.toFixed(1);
+                frameCount = 0;
+                lastTime = time;
+            }
+
+            // Apply camera motion based on mode
+            if (isCinematicMode) {
+                const t = time * 0.0003; // Slow time factor
+                // Fly-through path: spirals through the collision area
+                camera.position.x = 110 * Math.sin(t * 0.5);
+                camera.position.y = 35 * Math.sin(t * 0.2) + 20;
+                camera.position.z = 130 * Math.cos(t * 0.3);
+                
+                // Track midpoint of the two black holes
+                if (frames[currentFrameIndex]) {
+                    const frameCoords = frames[currentFrameIndex];
+                    const halfN = Math.floor(particleCount / 2);
+                    const midX = (frameCoords[0] + frameCoords[halfN * 3]) * 0.5;
+                    const midY = (frameCoords[1] + frameCoords[halfN * 3 + 1]) * 0.5;
+                    const midZ = (frameCoords[2] + frameCoords[halfN * 3 + 2]) * 0.5;
+                    controls.target.set(midX, midY, midZ);
+                }
+            } else {
+                // Apply auto-orbiting camera rotation (normal mode)
+                const rotSpeed = parseFloat(cameraRotSlider.value);
+                if (rotSpeed > 0 && !controls.state == -1) {
+                    const timeFactor = 0.001 * rotSpeed;
+                    const x = camera.position.x;
+                    const z = camera.position.z;
+                    camera.position.x = x * Math.cos(timeFactor) - z * Math.sin(timeFactor);
+                    camera.position.z = x * Math.sin(timeFactor) + z * Math.cos(timeFactor);
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // UI demo configuration parameters display update
+        document.getElementById('slider-demo-n').addEventListener('input', (e) => {
+            document.getElementById('lbl-demo-n').innerText = e.target.value;
+        });
+        document.getElementById('slider-demo-epsilon').addEventListener('input', (e) => {
+            document.getElementById('lbl-demo-epsilon').innerText = parseFloat(e.target.value).toFixed(1);
+        });
+
+        // --- MPI Backend API Integration ---
+        const API_BASE = "http://localhost:8000/api";
+        let mpiPollInterval = null;
+        let monitorInterval = null;
+        let isMpiRunning = false;
+
+        // Sync slider values to text labels
+        document.getElementById('slider-mpi-procs').addEventListener('input', (e) => {
+            document.getElementById('lbl-mpi-procs').innerText = e.target.value;
+        });
+        document.getElementById('slider-mpi-nodes').addEventListener('input', (e) => {
+            document.getElementById('lbl-mpi-nodes').innerText = e.target.value;
+        });
+        document.getElementById('slider-mpi-steps').addEventListener('input', (e) => {
+            document.getElementById('lbl-mpi-steps').innerText = e.target.value;
+        });
+
+        async function runMpiSimulation() {
+            const config = {
+                processes: parseInt(document.getElementById('slider-mpi-procs').value),
+                nodes: parseInt(document.getElementById('slider-mpi-nodes').value),
+                dataset: document.getElementById('select-mpi-dataset').value,
+                steps: parseInt(document.getElementById('slider-mpi-steps').value),
+                dt: 0.01 // dt is 0.01 as benchmarked in report
+            };
+
+            // Switch UI to Live C++ MPI mode
+            isDemoMode = false;
+            
+            // Set particleCount to match dataset size
+            const count = config.dataset.includes("10k") ? 10000 : 20000;
+            particleCount = count;
+            
+            // First load or generate Keplerian demo solver for visual synchronization
+            document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-gears fa-spin"></i> Initializing mesh...';
+            frames = runNBodySolver(particleCount, 0.8, config.steps, 0.15);
+            initOrUpdateParticleMesh();
+            updateTimelineControls();
+            renderFrame(0);
+
+            try {
+                const response = await fetch(`${API_BASE}/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "Backend run failed");
+                }
+                
+                const data = await response.json();
+                console.log("MPI run started:", data);
+                
+                // Update UI state
+                isMpiRunning = true;
+                document.getElementById('btn-mpi-run').disabled = true;
+                document.getElementById('btn-mpi-stop').disabled = false;
+                document.getElementById('mode-badge').innerText = "LIVE MPI RUN";
+                document.getElementById('mode-badge').style.background = "var(--orange-accent)";
+                document.getElementById('mode-badge').style.boxShadow = "0 0 10px var(--orange-glow)";
+                document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running on MPI Cluster...';
+                
+                // Clear any existing polling
+                if (mpiPollInterval) clearInterval(mpiPollInterval);
+                
+                // Start status polling
+                mpiPollInterval = setInterval(pollMpiStatus, 200);
+            } catch (err) {
+                console.error("Run error:", err);
+                document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-exmark" style="color: #ef4444;"></i> Connect Error: BE offline`;
+                alert("Cannot connect to Python FastAPI backend at " + API_BASE + ". Make sure the backend server is running: uvicorn app:app --port 8000");
+            }
+        }
+
+        async function stopMpiSimulation() {
+            try {
+                await fetch(`${API_BASE}/stop`, { method: 'POST' });
+            } catch (err) {
+                console.error("Stop error:", err);
+            }
+        }
+
+        async function pollMpiStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                if (!response.ok) return;
+                const status = await response.json();
+                
+                if (status.isRunning) {
+                    document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--orange-accent);"></i> Running step: ${status.currentStep} / ${status.totalSteps}`;
+                    
+                    // Synchronize Three.js frame with current MPI step
+                    const stepFraction = status.currentStep / status.totalSteps;
+                    const frameIdx = Math.min(frames.length - 1, Math.floor(stepFraction * (frames.length - 1)));
+                    renderFrame(frameIdx);
+                } else {
+                    // Stopped or completed
+                    clearInterval(mpiPollInterval);
+                    isMpiRunning = false;
+                    document.getElementById('btn-mpi-run').disabled = false;
+                    document.getElementById('btn-mpi-stop').disabled = true;
+                    
+                    if (status.errorMessage) {
+                        document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-exmark" style="color: #ef4444;"></i> Run Error`;
+                        alert("MPI Subprocess Error: " + status.errorMessage);
+                    } else {
+                        document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Run Completed (${status.elapsedTime}s)`;
+                        renderFrame(frames.length - 1);
+                    }
+                }
+            } catch (err) {
+                console.error("Poll status error:", err);
+            }
+        }
+
+        function updateRing(ringId, valId, percent) {
+            const ring = document.getElementById(ringId);
+            const text = document.getElementById(valId);
+            if (!ring || !text) return;
+            
+            // Circumference of R=16 circle is 2 * PI * 16 = 100.53
+            const circumference = 100.53;
+            const offset = circumference - (percent / 100) * circumference;
+            
+            ring.style.strokeDashoffset = offset;
+            text.innerText = `${Math.round(percent)}%`;
+            
+            // Dynamically change ring color based on load severity
+            if (percent > 85) {
+                ring.style.stroke = "#ef4444"; // Red for overloaded
+            } else if (percent > 50) {
+                ring.style.stroke = "#f59e0b"; // Orange/Yellow for heavy load
+            } else {
+                ring.style.stroke = "var(--cyan-accent)"; // Cyan for healthy load
+            }
+        }
+
+        async function pollMonitorStats() {
+            try {
+                const response = await fetch(`${API_BASE}/monitor`);
+                if (!response.ok) return;
+                const stats = await response.json();
+                
+                updateRing("ring-master", "val-master", stats.master);
+                updateRing("ring-node1", "val-node1", stats.node1);
+                updateRing("ring-node2", "val-node2", stats.node2);
+                updateRing("ring-node3", "val-node3", stats.node3);
+                updateRing("ring-node4", "val-node4", stats.node4);
+                
+                document.getElementById('stat-mpi-traffic').innerText = `${stats.networkTraffic.toFixed(1)} MB/s`;
+            } catch (err) {
+                // Backend is offline, show idle stats
+                updateRing("ring-master", "val-master", 0);
+                updateRing("ring-node1", "val-node1", 0);
+                updateRing("ring-node2", "val-node2", 0);
+                updateRing("ring-node3", "val-node3", 0);
+                updateRing("ring-node4", "val-node4", 0);
+                document.getElementById('stat-mpi-traffic').innerText = "0.0 MB/s";
+            }
+        }
+
+        // Start resource monitoring loop immediately
+        monitorInterval = setInterval(pollMonitorStats, 800);
+
+        // Initialize WebGL Scene
+        init();
+
+    </script>
+</body>
+</html>

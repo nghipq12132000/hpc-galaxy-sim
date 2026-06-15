@@ -56,6 +56,8 @@ def generate_galaxy(center_pos, center_vel, center_mass, num_stars, min_r, max_r
     return data
 
 def main():
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     np.random.seed(42)
     
     # Total particles N = 10,000 (each galaxy has 5000 particles: 1 black hole + 4999 stars)
@@ -71,7 +73,9 @@ def main():
     g2_vel = np.array([-3.2, -0.6, 0.0])
     g2_mass = 22000.0
     
-    dest_dir = r"G:\My Drive\Classroom\Tính toán hiệu năng cao\Báo cáo\Data"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = os.path.dirname(script_dir)
+    dest_dir = os.path.join(repo_dir, "data")
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
         
