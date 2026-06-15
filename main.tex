@@ -1,0 +1,290 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdftitle={Báo cáo cuối kỳ HPC: Song song hóa mô phỏng N-Body},
+    pdfpagemode=FullScreen,
+}
+
+\title{
+    \textbf{BÁO CÁO CUỐI KỲ: SONG SONG HÓA MÔ PHỎNG N-BODY TRÊN HỆ THỐNG HPC}\\
+    \large \textbf{Chủ đề: Ứng dụng mô phỏng N-Body trong Động học cấu trúc và Va chạm Thiên hà}\\
+    \small Học phần: Tính toán hiệu năng cao (High Performance Computing)
+}
+
+\author{
+    \textbf{Phạm Quốc Nghị} \\
+    MSHV: M3725006 \\
+    Email: \texttt{nghim3725006@gstudent.ctu.edu.vn} \\
+    \small Trường Đại Học Công Nghệ Thông Tin và Truyền Thông, Đại Học Cần Thơ
+}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Giới thiệu bài toán}
+\label{sec:intro}
+
+Mô phỏng N-Body (N-Body Simulation) là một phương pháp tính toán số học kinh điển dùng để dự đoán chuyển động của một hệ gồm $N$ hạt tương tác với nhau qua các lực vật lý (trọng lực, điện từ, hoặc lực liên kết phân tử). Trong vật lý thiên văn và vũ trụ học, mô phỏng N-Body đóng vai trò là một trong những công cụ mạnh mẽ nhất để nghiên cứu \textbf{Sự hình thành và tiến hóa của Thiên hà (Galaxy Formation \& Evolution)} ở quy mô từ nhỏ hơn vũ trụ học nhưng chi tiết hơn động lực học vĩ mô. 
+
+Trong khi các mô phỏng vũ trụ học vĩ mô (Cosmological Simulations) tập trung vào cấu trúc mạng sợi vũ trụ (Cosmic Web) và phân bố vật chất tối ở quy mô hàng trăm Megaparsec, các mô phỏng N-body quy mô thiên hà tập trung vào các cấu trúc nội tại và hành vi động học của một thiên hà hoặc một nhóm thiên hà nhỏ. Hai chủ đề quan trọng nhất trong lĩnh vực này bao gồm:
+
+\begin{enumerate}
+    \item \textbf{Sự va chạm và sáp nhập thiên hà (Galaxy Mergers)}: Mô phỏng động học cách hai hoặc nhiều thiên hà tương tác hấp dẫn, xuyên qua nhau và cuối cùng hợp nhất thành một thiên hà mới (thường là thiên hà elip). Một ví dụ kinh điển là vụ va chạm tương lai giữa thiên hà của chúng ta (Milky Way) và thiên hà Tiên Nữ (Andromeda) dự kiến xảy ra trong khoảng 4--5 tỷ năm tới. Mô phỏng N-body giúp tính toán chính xác cách các ngôi sao bị đẩy ra khỏi đĩa xoắn ốc ban đầu do lực thủy triều trọng lực (gravitational tidal forces), hình thành các đuôi thủy triều (tidal tails) và các dòng sao kéo dài hàng nghìn năm ánh sáng trong không gian liên thiên hà.
+    
+    \item \textbf{Động lực học cấu trúc xoắn ốc (Spiral Structure Dynamics)}: Giải thích cơ chế tự quay và sự hình thành, duy trì ổn định của các cánh tay xoắn ốc trong các thiên hà đĩa (như Milky Way). Các mô phỏng tuần tự đơn giản cho thấy cấu trúc đĩa xoắn ốc tự quay Keplerian sẽ nhanh chóng bị cuộn chặt lại và biến mất chỉ sau vài vòng quay (vấn đề cuộn chặt -- winding problem). Để giải quyết điều này, \textbf{Thuyết sóng mật độ (Density Wave Theory)} phát biểu rằng các cánh tay xoắn ốc không phải là cấu trúc vật chất cố định gồm các ngôi sao cụ thể, mà là các vùng mật độ cao cục bộ di chuyển chậm hơn tốc độ quay của các ngôi sao. Ngôi sao đi vào vùng sóng mật độ này sẽ bị chậm lại (giống như hiện tượng ùn tắc giao thông) và tạo nên các nhánh xoắn sáng bóng. Việc mô phỏng tự hấp dẫn của hàng triệu ngôi sao giúp làm rõ cách các sóng mật độ này được duy trì lâu dài dưới ảnh hưởng của nhiễu loạn trọng lực.
+\end{enumerate}
+
+Tuy nhiên, mô phỏng hấp dẫn trực tiếp (Direct N-Body Simulation) giữa từng cặp hạt có độ phức tạp tính toán rất lớn, tăng theo hàm mũ $O(N^2)$ cho mỗi bước thời gian. Khi mô phỏng một thiên hà chân thực với quy mô tối thiểu \textbf{1 triệu ngôi sao/hành tinh ($N \ge 1,000,000$)}, số lượng phép tính lực hấp dẫn đạt tới $10^{12}$ phép tính mỗi bước. Việc thực thi trên một CPU đơn nhân là hoàn toàn bất khả thi. Do đó, việc ứng dụng các kỹ thuật tính toán song song phân tán (MPI) kết hợp với các thuật toán phân cấp như cây \textbf{Barnes-Hut} là giải pháp thiết yếu để thực hiện các nghiên cứu thiên văn học hiện đại trên các hệ thống tính toán hiệu năng cao (HPC).
+
+\section{Cơ sở lý thuyết}
+\label{sec:theory}
+
+\subsection{Mô hình vật lý của tương tác hấp dẫn Newton}
+Xét hệ gồm $N$ vật thể đại diện cho các ngôi sao chuyển động trong không gian 3 chiều dưới tác dụng của trường hấp dẫn tương hỗ. Mỗi ngôi sao $i$ ($i = 0, 1, \dots, N-1$) được đặc trưng bởi khối lượng $m_i$, vectơ tọa độ vị trí $\mathbf{r}_i = (x_i, y_i, z_i)$, và vectơ vận tốc $\mathbf{v}_i = (vx_i, vy_i, vz_i)$.
+
+Theo định luật vạn vật hấp dẫn của Newton, lực hấp dẫn tác dụng lên ngôi sao $i$ do tất cả các ngôi sao $j$ khác trong hệ gây ra được tính bằng công thức:
+\begin{equation}
+\mathbf{F}_i = \sum_{j=0, j \neq i}^{N-1} G \frac{m_i m_j (\mathbf{r}_j - \mathbf{r}_i)}{|\mathbf{r}_j - \mathbf{r}_i|^3}
+\end{equation}
+Trong đó $G \approx 6.674 \times 10^{-11} \text{ m}^3\text{kg}^{-1}\text{s}^{-2}$ là hằng số hấp dẫn.
+
+Trong tính toán số học, khi các vật thể tiến lại quá gần nhau ($|\mathbf{r}_j - \mathbf{r}_i| \to 0$), lực hấp dẫn sẽ tăng lên vô hạn, gây ra lỗi tràn số hoặc quỹ đạo không ổn định do bước nhảy thời gian hữu hạn. Để khắc phục điều này, hằng số làm mềm (\textbf{softening parameter}) $\epsilon > 0$ được đưa vào mẫu số:
+\begin{equation}
+\mathbf{F}_i = \sum_{j=0, j \neq i}^{N-1} G \frac{m_i m_j (\mathbf{r}_j - \mathbf{r}_i)}{(|\mathbf{r}_j - \mathbf{r}_i|^2 + \epsilon^2)^{3/2}}
+\end{equation}
+Gia tốc của ngôi sao $i$ là:
+\begin{equation}
+\mathbf{a}_i = \frac{\mathbf{F}_i}{m_i} = G \sum_{j=0, j \neq i}^{N-1} \frac{m_j (\mathbf{r}_j - \mathbf{r}_i)}{(|\mathbf{r}_j - \mathbf{r}_i|^2 + \epsilon^2)^{3/2}}
+\end{equation}
+Hằng số làm mềm $\epsilon$ đóng vai trò triệt tiêu các lực vô hạn ở cự ly gần và mô phỏng thực tế các hệ sao như những đám mây bụi có kích thước hữu hạn thay vì chất điểm chất lượng cao, giúp nâng cao tính ổn định số học của tích phân thời gian \cite{trenti2008}.
+
+\subsection{Động lực học đĩa xoắn ốc Keplerian và Thuyết sóng mật độ}
+Để tạo lập cấu trúc ban đầu ổn định của một thiên hà đĩa xoắn ốc trước khi xảy ra va chạm, các ngôi sao phải được phân bổ trên một mặt phẳng dẹt (thường là mặt phẳng XY) xung quanh một lõi thiên hà có khối lượng cực lớn (siêu lỗ đen trung tâm $M_{center}$). Vận tốc quay quỹ đạo tròn của mỗi ngôi sao ở khoảng cách $r$ so với tâm thiên hà được thiết lập theo định luật Kepler cải tiến:
+\begin{equation}
+v_{orbit} = \sqrt{\frac{G \cdot M(r)}{r}}
+\end{equation}
+Trong đó $M(r)$ là tổng khối lượng nằm trong bán kính $r$. Vectơ vận tốc ban đầu của ngôi sao bằng tổng của vận tốc tịnh tiến của chính thiên hà đó và vận tốc quay tự thân \cite{binney2008}:
+\begin{equation}
+\mathbf{v}_{star} = \mathbf{v}_{galaxy} + \mathbf{v}_{orbit} \times \mathbf{\hat{r}}
+\end{equation}
+
+Theo \textbf{Thuyết sóng mật độ (Density Wave Theory)} của Lin và Shu, các nhánh xoắn ốc là biểu hiện của các sóng mật độ tự hấp dẫn lan truyền trên đĩa thiên hà. Các ngôi sao và đám mây khí bụi chuyển động theo quỹ đạo Keplerian của chúng và khi đi qua vùng sóng mật độ cao này, tốc độ của chúng giảm đi do lực hút hấp dẫn tăng lên từ vùng mật độ cao đó. Khi rời khỏi cánh tay xoắn ốc, chúng lại tăng tốc trở lại. Điều này được biểu diễn qua phương trình phân tán sóng mật độ cho đĩa tự hấp dẫn mỏng:
+\begin{equation}
+(\omega - m\Omega_p)^2 = \kappa^2 - 2\pi G \Sigma |k| + k^2 c_s^2
+\end{equation}
+Trong đó $\omega$ là tần số sóng, $\Omega_p$ là vận tốc góc của mô hình xoắn ốc, $\kappa$ là tần số epi-chu kỳ, $\Sigma$ là mật độ bề mặt đĩa, $k$ là số sóng radial, và $c_s$ là độ phân tán vận tốc của các ngôi sao.
+
+\subsection{Lực thủy triều hấp dẫn trong va chạm thiên hà (Galaxy Mergers)}
+Khi hai thiên hà tiến gần lại nhau, lực hấp dẫn vi sai tác dụng lên các phần khác nhau của thiên hà gây ra hiện tượng lực thủy triều trọng lực (gravitational tidal force). Lực thủy triều kéo dãn thiên hà theo trục nối hai tâm và nén lại theo các hướng vuông góc. 
+
+Xét ngôi sao nằm ở khoảng cách $d$ so với tâm thiên hà thứ nhất, chịu tác dụng lực hấp dẫn từ thiên hà thứ hai có khối lượng $M_c$ đang ở khoảng cách $R$ ($R \gg d$):
+\begin{equation}
+\mathbf{F}_{tidal} \approx \frac{2 G M_c d}{R^3}
+\end{equation}
+Lực thủy triều này làm phá vỡ sự cân bằng Keplerian trên đĩa, tước đoạt các hạt ở rìa ngoài thiên hà (nơi lực liên kết hấp dẫn với tâm là yếu nhất) và tạo ra các cấu trúc vĩ mô đặc trưng:
+\begin{itemize}
+    \item \textbf{Cầu nối sao (Bridge)}: Cấu trúc liên kết vật chất kéo dài trực tiếp từ thiên hà này sang thiên hà kia trong quá trình tiếp cận gần.
+    \item \textbf{Đuôi thủy triều (Tidal Tails)}: Hai dải sao dài và cong bị văng ngược ra phía ngoài không gian liên thiên hà do mô-men động lượng bảo toàn và lực thủy triều kéo dãn đĩa.
+\end{itemize}
+
+\subsection{Giải pháp mô phỏng quy mô lớn ($\ge 1,000,000$ hạt) bằng thuật toán Barnes-Hut}
+Tính toán trực tiếp lực hấp dẫn yêu cầu tương tác $N \times N$, dẫn tới giới hạn nghiêm trọng về kích thước hệ hạt. Để mô phỏng được hệ $1,000,000$ hạt, thuật toán \textbf{Barnes-Hut (Tree-code)} chia không gian 3 chiều thành cấu trúc cây bát phân (\textbf{Octree}).
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{barnes_hut.png}
+    \caption{Phân chia không gian phân cấp Quadtree và cấu trúc cây tương ứng trong thuật toán Barnes-Hut.}
+    \label{fig:barnes_hut}
+\end{figure}
+
+Thuật toán hoạt động theo các bước chính:
+\begin{enumerate}
+    \item \textbf{Xây dựng cây Octree}: Bắt đầu bằng một hộp lập phương bao quanh toàn bộ hệ hạt. Hộp này được chia làm 8 hộp con bằng nhau. Quá trình chia nhỏ được thực hiện đệ quy cho đến khi mỗi hộp con chứa không quá 1 hạt.
+    \item \textbf{Tính toán khối lượng và trọng tâm hình học}: Duyệt cây từ dưới lên (post-order traversal) để tính toán tổng khối lượng và tọa độ khối tâm (center of mass) cho tất cả các node trong của cây.
+    \item \textbf{Tính toán lực hấp dẫn}: Đối với mỗi hạt, duyệt cây từ gốc xuống. Tại mỗi node của cây, tính khoảng cách $d$ từ hạt đến khối tâm của node. Gọi $s$ là kích thước cạnh của node. Sử dụng \textbf{Tiêu chuẩn chấp nhận đa cực (Multipole Acceptance Criterion -- MAC)} để quyết định xem có thể xấp xỉ toàn bộ các hạt trong node bằng một hạt ảo duy nhất nằm ở khối tâm của node hay không:
+    \begin{equation}
+    \frac{s}{d} < \theta
+    \end{equation}
+    Trong đó $\theta \approx 0.5 - 1.0$ là tham số dung sai. Nếu điều kiện thỏa mãn, ta tính lực hấp dẫn do khối tâm của node tác dụng lên hạt và dừng duyệt nhánh đó. Nếu không, ta duyệt tiếp các node con của nó. Độ phức tạp tính lực giảm xuống còn $O(N \log N)$ \cite{brandt2022, rein2011}.
+\end{enumerate}
+
+\section{Thiết kế giải pháp song song với MPI}
+\label{sec:parallel}
+
+Giải pháp song song hóa hệ thống mô phỏng được xây dựng trên mô hình lập trình \textbf{SPMD (Single Program Multiple Data)} sử dụng thư viện giao tiếp phân tán \textbf{MPI (Message Passing Interface)}.
+
+\subsection{Phân hoạch dữ liệu và Cân bằng tải}
+\begin{itemize}
+    \item \textbf{Direct N-Body ($O(N^2)$)}:
+    Dữ liệu vị trí và vận tốc được quản lý theo mô hình cấu trúc mảng flat \textbf{SoA (Structure of Arrays)} nhằm tối ưu hóa việc nạp dữ liệu liên tục vào bộ nhớ đệm Cache CPU (L1/L2/L3) và hỗ trợ tự động vector hóa (AVX-512). 
+    
+    Hệ thống gồm $P$ tiến trình MPI. Tổng số $N$ ngôi sao được chia đều cho các tiến trình. Tiến trình có thứ hạng $r$ ($r \in [0, P-1]$) sẽ chịu trách nhiệm cập nhật trạng thái cho $n_{local}$ hạt thuộc khoảng chỉ số cục bộ $[start_r, end_r)$:
+    \begin{equation}
+    n_{local} = \left\lfloor \frac{N}{P} \right\rfloor + (r < N \pmod P ? 1 : 0)
+    \end{equation}
+    Điều này đảm bảo cân bằng tải hoàn hảo về lượng tính toán lực giữa các tiến trình.
+
+    \item \textbf{Barnes-Hut cho hệ hạt lớn ($N \ge 1,000,000$)}:
+    Do mật độ phân bố hạt trong thiên hà va chạm cực kỳ không đồng đều (tập trung rất cao ở các lỗ đen lõi và thưa thớt ở vùng rìa), việc chia dải chỉ số phẳng sẽ dẫn đến mất cân bằng tải trầm trọng. Tiến trình quản lý các hạt ở lõi sẽ phải duyệt những nhánh cây rất sâu và tính toán phức tạp hơn nhiều.
+    
+    Giải pháp thiết kế truyền thống sử dụng phương pháp \textbf{Phân hoạch nhị phân trực giao (Orthogonal Recursive Bisection - ORB)} do Becciani và Antonuccio đề xuất \cite{antonuccio1994}, phân hoạch không gian thành các hộp con có tải trọng tính toán tương đương. Tuy nhiên, phương pháp này đòi hỏi liên lạc phức tạp để định vị lại hạt. 
+    
+    Giải pháp tối ưu hiện đại sử dụng \textbf{Đường cong lấp đầy không gian Hilbert (Hilbert Space-Filling Curve)} để ánh xạ không gian 3 chiều thành đường đi 1 chiều. Các hạt được sắp xếp theo chỉ số Hilbert của chúng, bảo toàn tối đa tính cục bộ không gian. Đường đi 1 chiều này sau đó được chia thành $P$ đoạn sao cho tổng trọng số tính toán (được đo bằng số lần duyệt cây ở bước trước đó) trên mỗi tiến trình là tương đương nhau.
+\end{itemize}
+
+\subsection{Sơ đồ truyền thông và Đồng bộ hóa}
+Trong mỗi bước thời gian ($dt$), mặc dù mỗi tiến trình chỉ chịu trách nhiệm cập nhật vị trí cho $n_{local}$ hạt cục bộ, nhưng để tính toán chính xác lực hấp dẫn tác dụng lên chúng, nó cần tọa độ hiện tại của \textbf{tất cả} $N$ hạt trong hệ thống. Quy trình giao tiếp được thiết kế như sau:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{mpi_allgatherv.png}
+    \caption{Sơ đồ đồng bộ hóa tọa độ hạt toàn cục sử dụng MPI\_Allgatherv.}
+    \label{fig:communication}
+\end{figure}
+
+\begin{enumerate}
+    \item \textbf{Đồng bộ tọa độ toàn cục (`MPI\_Allgatherv`)}:
+    Mỗi tiến trình gửi mảng tọa độ cục bộ phẳng (\texttt{pos\_x}, \texttt{pos\_y}, \texttt{pos\_z}) của mình và nhận lại dữ liệu tọa độ của tất cả các hạt từ tất cả các tiến trình khác. Việc dùng hàm truyền thông tập thể không đồng nhất \texttt{MPI\_Allgatherv} tối ưu hóa hiệu năng băng thông bằng cách giảm số lượng thông điệp truyền qua mạng vật lý so với việc gửi điểm--điểm (\texttt{MPI\_Send} / \texttt{MPI\_Recv}).
+    
+    \item \textbf{Xây dựng Locally Essential Tree (LET)}:
+    Đối với $N \ge 1,000,000$, việc đồng bộ toàn bộ mảng hạt $O(N)$ qua mạng là quá tốn kém và bộ nhớ của mỗi node không đủ để chứa toàn bộ cây. Mỗi tiến trình chỉ xây dựng một cây Octree cục bộ từ tập hạt của nó. Sau đó, các tiến trình trao đổi các node cây ở mức cao và các cấu trúc nhánh cần thiết khác thông qua thuật toán \textbf{Locally Essential Tree (LET)} \cite{brandt2022} hoặc \textbf{Distributed Essential Tree (DET)} \cite{rein2011}. Cây LET chứa đầy đủ thông tin của các hạt lân cận cục bộ (chi tiết) và các hạt ở xa (được gộp chung thành các pseudoparticles ở mức cao của cây), đủ để tính lực cho các hạt thuộc tiến trình đó mà không cần truyền toàn bộ dữ liệu hạt qua mạng, giúp tăng khả năng mở rộng (scalability) của hệ thống lên hàng chục ngàn nhân.
+\end{enumerate}
+
+\subsection{Mô hình song song lai nâng cao (Hybrid MPI + OpenMP + GPU)}
+Để đạt được hiệu năng tối ưu trên các siêu máy tính hiện đại hoặc các cụm nhiều nhân heterogeneous, các ứng dụng N-Body lớn thường sử dụng lập trình song song lai. Nghiên cứu của Duy và cộng sự (2012) \cite{duy2012} cho thấy việc phân cấp luồng qua OpenMP giúp giảm bớt chi phí truyền thông của MPI trên các node đa nhân. 
+
+Gần đây hơn, mã nguồn \textbf{PeTar} của Wang và cộng sự (2020) \cite{wang2020} kết hợp cả MPI, OpenMP, SIMD và tăng tốc GPU (CUDA) để đẩy nhanh tốc độ tính toán phần tương tác cự ly gần, trong khi dùng Barnes-Hut trên CPU để quản lý các tương tác cự ly xa. Kỹ thuật này cùng với các thiết bị tăng tốc phần cứng chuyên dụng như card \textbf{GRAPE-5} \cite{kawai1999} giúp đẩy hiệu năng tính toán N-Body lên hàng chục Petaflops, cho phép mô phỏng động học các cụm sao và thiên hà va chạm lên tới hàng chục triệu hạt.
+
+\subsection{Các thách thức về bộ nhớ và băng thông ở quy mô Extreme-scale}
+Như đã chỉ ra trong nghiên cứu trên siêu máy tính Sunway TaihuLight của Iwasawa và cộng sự (2019) \cite{iwasawa2019}, khi quy mô hệ thống tăng lên hàng triệu tiến trình, thắt nút cổ chai thực tế không nằm ở năng lực xử lý tính toán của CPU/GPU mà là ở **băng thông bộ nhớ (memory bandwidth)** và **băng thông mạng liên kết (network bandwidth)**. Việc thiết kế cấu trúc dữ liệu nén, thuật toán gom cụm cây tối thiểu hóa lượng dữ liệu truyền qua mạng, và cơ chế lập lịch hướng sự kiện (event-driven execution) \cite{dekate2011} là các xu hướng nghiên cứu bắt buộc để đạt tới kỷ nguyên tính toán Exascale.
+
+\subsection{Thuật toán tích phân số học thời gian}
+Sau khi tính toán được gia tốc $\mathbf{a}_i$, trạng thái của ngôi sao được cập nhật bằng phương pháp tích phân số học Leapfrog (hoặc Euler cải tiến) để bảo toàn năng lượng của hệ tốt hơn trong thời gian dài:
+\begin{align}
+\mathbf{v}_i\left(t + \frac{dt}{2}\right) &= \mathbf{v}_i\left(t - \frac{dt}{2}\right) + \mathbf{a}_i(t) dt \\
+\mathbf{r}_i(t + dt) &= \mathbf{r}_i(t) + \mathbf{v}_i\left(t + \frac{dt}{2}\right) dt
+\end{align}
+
+\section{Môi trường thực nghiệm}
+\label{sec:experiment}
+
+Để đánh giá hiệu năng và khả năng mở rộng của chương trình mô phỏng song song MPI, thực nghiệm được thiết kế trên hệ thống tính toán hiệu năng cao với các thông số cấu hình cụ thể như sau:
+
+\begin{itemize}
+    \item \textbf{Phần cứng hệ thống}:
+    \begin{itemize}
+        \item Bộ vi xử lý (CPU): Intel Core i7-12700H (bao gồm 6 nhân hiệu năng cao P-Cores hỗ trợ Hyper-Threading và 8 nhân tiết kiệm điện E-Cores, tổng cộng 20 luồng logic, xung nhịp turbo tối đa 4.7 GHz, 24 MB bộ nhớ đệm L3).
+        \item Bộ nhớ RAM: 16 GB DDR4 tốc độ 3200 MHz chạy chế độ Kênh đôi (Dual-Channel).
+    \end{itemize}
+    \item \textbf{Môi trường phần mềm}:
+    \begin{itemize}
+        \item Hệ điều hành: Ubuntu 22.04 LTS chạy trên nền tảng WSL 2 (Windows Subsystem for Linux 2 / Windows 11).
+        \item Trình biên dịch: \texttt{gcc} phiên bản 11.4.0 với các cờ tối ưu hóa biên dịch: \texttt{-O3 -ffast-math -march=native}.
+        \item Thư viện MPI: OpenMPI phiên bản 4.1.2.
+    \end{itemize}
+    \item \textbf{Tham số thiết lập mô phỏng}:
+    \begin{itemize}
+        \item Quy mô hạt: Hệ gồm $N = 10,000$ hạt (trong đó Thiên hà 1 chứa 5,000 hạt xoắn ốc bên trái, Thiên hà 2 chứa 5,000 hạt xoắn ốc bên phải).
+        \item Số bước thời gian chạy: $steps = 100$.
+        \item Bước nhảy thời gian: $dt = 0.01$ giây.
+        \item Hằng số làm mềm: $\epsilon = 0.001$.
+    \end{itemize}
+\end{itemize}
+
+\section{Kết quả thực nghiệm và đánh giá hiệu năng}
+\label{sec:results}
+\textit{(Phần này sẽ được hoàn thành sau khi triển khai xong mã nguồn chương trình, chạy thực nghiệm đo đạc thời gian thực thi thực tế trên các cấu hình 1, 2, 4, 8, 16 tiến trình và vẽ các biểu đồ hiệu năng tương ứng.)}
+
+\section{Kết luận và hướng phát triển}
+\label{sec:conclusion}
+
+Báo cáo bước đầu đã xây dựng thành công cơ sở lý thuyết vững chắc cho bài toán mô phỏng N-Body ứng dụng trong nghiên cứu sự va chạm thiên hà và động lực học cấu trúc đĩa xoắn ốc. Chúng tôi đã làm rõ cơ chế hình thành các đuôi thủy triều do lực thủy triều hấp dẫn gây ra, đồng thời thảo luận về sự ổn định của cánh tay xoắn ốc thông qua sóng mật độ. Hướng đi song song hóa sử dụng thư viện MPI thông qua cơ chế phân hoạch dữ liệu SoA và giao tiếp tập thể \texttt{MPI\_Allgatherv} đã được thiết kế chi tiết để làm nền tảng triển khai thực tế.
+
+\textbf{Hướng phát triển tiếp theo}:
+\begin{enumerate}
+    \item Hoàn thiện cài đặt mã nguồn C/MPI đầy đủ cho hai phiên bản tuần tự và song song. Chạy thử nghiệm và điền số liệu đo đạc thực tế vào mục Kết quả thực nghiệm.
+    \item Triển khai thuật toán cây Barnes-Hut song song với MPI (LET) kết hợp tối ưu hóa đa luồng lai Hybrid MPI + OpenMP để chạy thử nghiệm các hệ hạt có kích thước lớn thực tế ($N \ge 1,000,000$).
+    \item Nghiên cứu tích hợp tăng tốc GPU (CUDA) để đẩy nhanh tốc độ tính toán lực hấp dẫn ở cự ly gần trong các nhân tính toán HPC.
+\end{enumerate}
+
+\newpage
+\begin{thebibliography}{9}
+
+\bibitem{duy2012}
+Truong Vinh Truong Duy, Katsuhiro Yamazaki, Kosai Ikegami, Shigeru Oyanagi (2012). 
+\emph{Hybrid MPI-OpenMP Paradigm on SMP Clusters: MPEG-2 Encoder and N-Body Simulation}. 
+arXiv preprint arXiv:1211.2292.
+
+\bibitem{trenti2008}
+M. Trenti, P. Hut (2008). 
+\emph{Gravitational N-body Simulations}. 
+Scholarpedia Encyclopedia of Astrophysics. arXiv preprint arXiv:0806.3950.
+
+\bibitem{gropp2014}
+William Gropp, Ewing Lusk, Anthony Skjellum (2014). 
+\emph{Using MPI: Portable Parallel Programming with the Message-Passing Interface}, 3rd Edition. 
+The MIT Press.
+
+\bibitem{binney2008}
+James Binney, Scott Tremaine (2008).
+\emph{Galactic Dynamics}, 2nd Edition.
+Princeton University Press.
+
+\bibitem{brandt2022}
+Alexander Brandt (2022).
+\emph{On Distributed Gravitational N-Body Simulations}.
+arXiv preprint arXiv:2203.08966.
+
+\bibitem{wang2020}
+Long Wang, Masaki Iwasawa, Keigo Nitadori, Junichiro Makino (2020).
+\emph{PeTar: a high-performance N-body code for modeling massive collisional stellar systems}.
+arXiv preprint arXiv:2006.16560.
+
+\bibitem{rein2011}
+Hanno Rein, Shang-Fei Liu (2011).
+\emph{REBOUND: An open-source multi-purpose N-body code for collisional dynamics}.
+arXiv preprint arXiv:1110.4876.
+
+\bibitem{antonuccio1994}
+V. Antonuccio-Delogu, U. Becciani (1994).
+\emph{Capanic: A Parallel Tree N-Body Code for Inhomogeneous Clusters of Processors}.
+arXiv preprint astro-ph/9406065.
+
+\bibitem{iwasawa2019}
+Masaki Iwasawa, Daisuke Namekata, Ryo Sakamoto, et al. (2019).
+\emph{Implementation and Performance of Barnes-Hut N-body algorithm on Extreme-scale Heterogeneous Many-core Architectures}.
+arXiv preprint arXiv:1907.02289.
+
+\bibitem{kawai1999}
+Atsushi Kawai, Toshiyuki Fukushige, Junichiro Makino, Makoto Taiji (1999).
+\emph{GRAPE-5: A Special-Purpose Computer for N-body Simulation}.
+arXiv preprint astro-ph/9909116.
+
+\bibitem{dekate2011}
+Chirag Dekate, Matthew Anderson, Maciej Brodowicz, et al. (2011).
+\emph{Improving the scalability of parallel N-body applications with an event driven constraint based execution model}.
+arXiv preprint arXiv:1109.5190.
+
+\end{thebibliography}
+
+\end{document}
