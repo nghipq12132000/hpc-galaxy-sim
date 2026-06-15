@@ -27,5 +27,6 @@ def get_status():
         "nodes": sim_state.nodes,
         "dataset": sim_state.dataset,
         "cmdLine": sim_state.cmd_line,
-        "errorMessage": sim_state.error_message
+        "errorMessage": sim_state.error_message,
+        "logs": sim_state.logs
     }

@@ -14,6 +14,7 @@
     <!-- Three.js and OrbitControls via CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         /* Modern Glassmorphic Dark Space CSS Styling */
@@ -111,22 +112,134 @@
             gap: 20px;
         }
 
-        /* Info & Stats Panel */
-        #stats-panel {
+        /* Right Panel Container (Scrollable) */
+        #right-panel {
+            position: absolute;
             top: 100px;
             right: 20px;
-            width: 280px;
-            padding: 20px;
+            width: 320px;
+            bottom: 220px;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 15px;
+            z-index: 10;
+        }
+
+        .hud-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Terminal Console */
+        #terminal-console {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 320px;
+            height: 185px;
+            background: rgba(5, 5, 10, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px;
+            z-index: 10;
+            font-family: 'Courier New', monospace;
+            font-size: 0.65rem;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        #terminal-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: var(--cyan-accent);
+            margin-bottom: 6px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #terminal-output {
+            flex-grow: 1;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #34d399; /* Console Green */
+            text-align: left;
+            line-height: 1.35;
+        }
+
+        /* Ranks Mapping visualizer */
+        .ranks-map-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 5px;
+        }
+
+        .ranks-node-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            background: rgba(255,255,255,0.015);
+            border: 1px solid rgba(255,255,255,0.03);
+            border-radius: 6px;
+            padding: 5px 8px;
+        }
+
+        .ranks-node-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .ranks-node-badges {
+            display: flex;
+            gap: 3px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            max-width: 140px;
+        }
+
+        .rank-badge {
+            background: rgba(6, 182, 212, 0.15);
+            color: var(--cyan-accent);
+            border: 1px solid rgba(6, 182, 212, 0.35);
+            border-radius: 4px;
+            padding: 1px 3px;
+            font-size: 0.55rem;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+        }
+
+        .rank-badge.master-rank {
+            background: rgba(249, 115, 22, 0.15);
+            color: var(--orange-accent);
+            border-color: rgba(249, 115, 22, 0.35);
         }
 
         /* Playback Timeline Controller */
         #timeline-panel {
             bottom: 20px;
             left: 20px;
-            right: 20px;
+            right: 360px; /* leaves room for the 320px terminal console + 20px gap */
             padding: 15px 25px;
             display: flex;
             flex-direction: column;
@@ -556,6 +669,24 @@
                 <input type="range" id="slider-mpi-steps" min="50" max="500" step="50" value="100">
             </div>
 
+            <div class="control-group">
+                <div class="control-label" style="margin-top: 3px;">
+                    <span>Cluster Network (IP settings)</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 2fr 3fr; gap: 4px; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Master:</span>
+                    <input type="text" id="ip-master" value="192.168.1.10" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 1:</span>
+                    <input type="text" id="ip-node1" value="192.168.1.11" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 2:</span>
+                    <input type="text" id="ip-node2" value="192.168.1.12" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 3:</span>
+                    <input type="text" id="ip-node3" value="192.168.1.13" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 4:</span>
+                    <input type="text" id="ip-node4" value="192.168.1.14" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+                </div>
+            </div>
+
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 5px;">
                 <button class="btn btn-accent" id="btn-mpi-run" onclick="runMpiSimulation()"><i class="fa-solid fa-play"></i> Run MPI</button>
                 <button class="btn" id="btn-mpi-stop" onclick="stopMpiSimulation()" disabled><i class="fa-solid fa-stop"></i> Stop</button>
@@ -563,37 +694,41 @@
         </div>
     </div>
 
-    <!-- Stats Panel -->
-    <div id="stats-panel" class="glass-panel">
-        <div class="section-title">Real-Time Stats</div>
-        <div class="stats-grid">
-            <div class="stat-item">
-                <div class="stat-label">Total Particles</div>
-                <div class="stat-val" id="stat-particles">1,000</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Render FPS</div>
-                <div class="stat-val" id="stat-fps">60.0</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Current Step</div>
-                <div class="stat-val" id="stat-step">0 / 250</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Simulation Time</div>
-                <div class="stat-val" id="stat-sim-time">0.00s</div>
-            </div>
-        </div>
+    <!-- Right Panel Container -->
+    <div id="right-panel">
         
-        <div class="control-group" style="margin-top: 5px;">
-            <div class="control-label">
-                <span>Simulation Status</span>
+        <!-- Real-Time Stats Card -->
+        <div class="hud-card" id="stats-card">
+            <div class="section-title">Real-Time Stats</div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Total Particles</div>
+                    <div class="stat-val" id="stat-particles">1,000</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Render FPS</div>
+                    <div class="stat-val" id="stat-fps">60.0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Current Step</div>
+                    <div class="stat-val" id="stat-step">0 / 250</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Simulation Time</div>
+                    <div class="stat-val" id="stat-sim-time">0.00s</div>
+                </div>
             </div>
-            <span id="lbl-status" style="font-size: 0.75rem; font-weight: 500; color: #34d399;"><i class="fa-solid fa-circle-dot"></i> Idle</span>
+            
+            <div class="control-group" style="margin-top: 5px;">
+                <div class="control-label">
+                    <span>Simulation Status</span>
+                </div>
+                <span id="lbl-status" style="font-size: 0.75rem; font-weight: 500; color: #34d399;"><i class="fa-solid fa-circle-dot"></i> Idle</span>
+            </div>
         </div>
 
         <!-- Cluster Resources Monitor -->
-        <div class="control-group" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+        <div class="hud-card" id="cluster-monitor-card">
             <div class="section-title">Cluster Monitor</div>
             <div class="monitor-grid">
                 <div class="gauge-container">
@@ -633,11 +768,37 @@
                 </div>
             </div>
             
-            <div class="control-label" style="margin-top: 8px;">
+            <div class="control-label" style="margin-top: 5px;">
                 <span>MPI Network Traffic</span>
                 <span id="stat-mpi-traffic" class="control-val">0.0 MB/s</span>
             </div>
         </div>
+
+        <!-- MPI Process Mapping -->
+        <div class="hud-card" id="ranks-mapping-card">
+            <div class="section-title">MPI Ranks Mapping</div>
+            <div class="ranks-map-container" id="ranks-map-list">
+                <!-- Dynamically populated by JS -->
+            </div>
+        </div>
+
+        <!-- Performance Graph -->
+        <div class="hud-card" id="performance-chart-card">
+            <div class="section-title">Performance Analysis</div>
+            <div style="height: 140px; margin-top: 5px; position: relative;">
+                <canvas id="perfChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminal Log Console -->
+    <div id="terminal-console">
+        <div id="terminal-title">
+            <span><i class="fa-solid fa-terminal"></i> MPI CLUSTER STDOUT</span>
+            <button onclick="clearConsole()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:0.6rem;"><i class="fa-solid fa-trash"></i> Clear</button>
+        </div>
+        <div id="terminal-output">[System] Welcome to HPC Galaxy Simulation Dashboard.
+[System] Choose settings on the left sidebar and click "Run MPI" to start.</div>
     </div>
 
     <!-- Bottom Timeline scrub controller -->
@@ -1631,15 +1792,205 @@
         let monitorInterval = null;
         let isMpiRunning = false;
 
-        // Sync slider values to text labels
+        // --- Performance Chart (Chart.js) ---
+        let performanceChart = null;
+
+        function initPerformanceChart() {
+            const ctx = document.getElementById('perfChart').getContext('2d');
+            
+            const processes = [1, 2, 4, 8, 12, 16];
+            const benchmarkTime = [18.2, 9.4, 4.9, 2.6, 1.9, 1.6];
+            const benchmarkSpeedup = [1.0, 1.94, 3.71, 7.00, 9.58, 11.38];
+            const idealSpeedup = [1.0, 2.0, 4.0, 8.0, 12.0, 16.0];
+            
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: processes,
+                    datasets: [
+                        {
+                            label: 'Time (s)',
+                            data: benchmarkTime,
+                            borderColor: '#f97316',
+                            backgroundColor: 'rgba(249, 115, 22, 0.05)',
+                            yAxisID: 'yTime',
+                            borderWidth: 2,
+                            pointRadius: 3.5,
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Speedup',
+                            data: benchmarkSpeedup,
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.05)',
+                            yAxisID: 'ySpeedup',
+                            borderWidth: 2,
+                            pointRadius: 3.5,
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Ideal Speedup',
+                            data: idealSpeedup,
+                            borderColor: 'rgba(255, 255, 255, 0.2)',
+                            borderDash: [4, 4],
+                            yAxisID: 'ySpeedup',
+                            borderWidth: 1,
+                            pointRadius: 0,
+                            fill: false
+                        },
+                        {
+                            label: 'Your Run',
+                            data: [],
+                            borderColor: '#10b981',
+                            backgroundColor: '#10b981',
+                            pointRadius: 6.5,
+                            pointHoverRadius: 8.5,
+                            showLine: false,
+                            yAxisID: 'yTime'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#9ca3af',
+                                boxWidth: 10,
+                                font: { size: 8 }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Processes (p)',
+                                color: '#9ca3af',
+                                font: { size: 8 }
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                            ticks: { color: '#9ca3af', font: { size: 8 } }
+                        },
+                        yTime: {
+                            type: 'linear',
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Time (s)',
+                                color: '#f97316',
+                                font: { size: 8 }
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.03)' },
+                            ticks: { color: '#9ca3af', font: { size: 8 } }
+                        },
+                        ySpeedup: {
+                            type: 'linear',
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Speedup',
+                                color: '#06b6d4',
+                                font: { size: 8 }
+                            },
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#9ca3af', font: { size: 8 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- MPI Ranks Mapping visualizer ---
+        function updateRanksMap(procs, nodes) {
+            const container = document.getElementById('ranks-map-list');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            // Master row (Rank 0 is always there)
+            let masterBadgesHtml = '<span class="rank-badge master-rank">R0</span>';
+            const masterIp = document.getElementById('ip-master').value;
+            
+            // Distribute ranks 1 to procs-1 across active nodes
+            let nodeRanks = Array.from({ length: 4 }, () => []);
+            for (let r = 1; r < procs; r++) {
+                let nodeIdx = (r - 1) % nodes;
+                nodeRanks[nodeIdx].push(r);
+            }
+            
+            // Append Master row
+            container.innerHTML += `
+                <div class="ranks-node-row">
+                    <span class="ranks-node-name"><i class="fa-solid fa-server" style="color:var(--orange-accent);"></i> Master</span>
+                    <span style="font-size: 0.55rem; color:var(--text-secondary); font-family: monospace;">${masterIp}</span>
+                    <div class="ranks-node-badges">${masterBadgesHtml}</div>
+                </div>
+            `;
+            
+            // Append Node rows
+            for (let n = 0; n < 4; n++) {
+                const isSelected = n < nodes;
+                const ipVal = document.getElementById(`ip-node${n+1}`).value;
+                let badgesHtml = '';
+                
+                if (isSelected) {
+                    nodeRanks[n].forEach(r => {
+                        badgesHtml += `<span class="rank-badge">R${r}</span>`;
+                    });
+                    if (badgesHtml === '') {
+                        badgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Idle</span>';
+                    }
+                } else {
+                    badgesHtml = '<span style="font-size:0.55rem; color:rgba(255,255,255,0.15);">Offline</span>';
+                }
+                
+                container.innerHTML += `
+                    <div class="ranks-node-row" style="${isSelected ? '' : 'opacity: 0.35;'}">
+                        <span class="ranks-node-name" style="${isSelected ? 'color: var(--cyan-accent);' : ''}"><i class="fa-solid fa-network-wired"></i> Node ${n+1}</span>
+                        <span style="font-size: 0.55rem; color:var(--text-secondary); font-family: monospace;">${ipVal}</span>
+                        <div class="ranks-node-badges">${badgesHtml}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // --- Terminal Console Log handlers ---
+        function appendConsole(message) {
+            const term = document.getElementById('terminal-output');
+            if (!term) return;
+            term.innerText += '\n' + message;
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function clearConsole() {
+            const term = document.getElementById('terminal-output');
+            if (term) term.innerText = '[System] Terminal Cleared.';
+        }
+
+        // Sync slider values to text labels & ranks map
         document.getElementById('slider-mpi-procs').addEventListener('input', (e) => {
-            document.getElementById('lbl-mpi-procs').innerText = e.target.value;
+            const procs = parseInt(e.target.value);
+            document.getElementById('lbl-mpi-procs').innerText = procs;
+            updateRanksMap(procs, parseInt(document.getElementById('slider-mpi-nodes').value));
         });
         document.getElementById('slider-mpi-nodes').addEventListener('input', (e) => {
-            document.getElementById('lbl-mpi-nodes').innerText = e.target.value;
+            const nodes = parseInt(e.target.value);
+            document.getElementById('lbl-mpi-nodes').innerText = nodes;
+            updateRanksMap(parseInt(document.getElementById('slider-mpi-procs').value), nodes);
         });
         document.getElementById('slider-mpi-steps').addEventListener('input', (e) => {
             document.getElementById('lbl-mpi-steps').innerText = e.target.value;
+        });
+
+        // Add input listeners for cluster IPs
+        ['ip-master', 'ip-node1', 'ip-node2', 'ip-node3', 'ip-node4'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                updateRanksMap(
+                    parseInt(document.getElementById('slider-mpi-procs').value),
+                    parseInt(document.getElementById('slider-mpi-nodes').value)
+                );
+            });
         });
 
         async function runMpiSimulation() {
@@ -1648,7 +1999,7 @@
                 nodes: parseInt(document.getElementById('slider-mpi-nodes').value),
                 dataset: document.getElementById('select-mpi-dataset').value,
                 steps: parseInt(document.getElementById('slider-mpi-steps').value),
-                dt: 0.01 // dt is 0.01 as benchmarked in report
+                dt: 0.01 
             };
 
             // Switch UI to Live C++ MPI mode
@@ -1666,6 +2017,10 @@
             renderFrame(0);
 
             try {
+                // Clear console log
+                clearConsole();
+                appendConsole(`[System] Initializing connection to backend: ${API_BASE}...`);
+
                 const response = await fetch(`${API_BASE}/run`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1679,6 +2034,7 @@
                 
                 const data = await response.json();
                 console.log("MPI run started:", data);
+                appendConsole("[System] Simulation worker started on FastAPI backend.");
                 
                 // Update UI state
                 isMpiRunning = true;
@@ -1693,17 +2049,19 @@
                 if (mpiPollInterval) clearInterval(mpiPollInterval);
                 
                 // Start status polling
-                mpiPollInterval = setInterval(pollMpiStatus, 200);
+                mpiPollInterval = setInterval(pollMpiStatus, 250);
             } catch (err) {
                 console.error("Run error:", err);
-                document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-exmark" style="color: #ef4444;"></i> Connect Error: BE offline`;
-                alert("Cannot connect to Python FastAPI backend at " + API_BASE + ". Make sure the backend server is running: uvicorn app:app --port 8000");
+                document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Connect Error`;
+                appendConsole(`[Error] Failed to connect to Python FastAPI backend. Make sure the server is running on http://localhost:8000.`);
+                alert("Cannot connect to Python FastAPI backend at " + API_BASE + ". Make sure the backend server is running: python backend/run.py");
             }
         }
 
         async function stopMpiSimulation() {
             try {
                 await fetch(`${API_BASE}/stop`, { method: 'POST' });
+                appendConsole("[System] Sent stop signal to backend.");
             } catch (err) {
                 console.error("Stop error:", err);
             }
@@ -1715,6 +2073,13 @@
                 if (!response.ok) return;
                 const status = await response.json();
                 
+                // Print backend stdout logs in terminal console
+                if (status.logs && status.logs.length > 0) {
+                    const term = document.getElementById('terminal-output');
+                    term.innerText = status.logs.join('\n');
+                    term.scrollTop = term.scrollHeight; // Auto scroll to bottom
+                }
+
                 if (status.isRunning) {
                     document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-notch fa-spin" style="color: var(--orange-accent);"></i> Running step: ${status.currentStep} / ${status.totalSteps}`;
                     
@@ -1730,11 +2095,18 @@
                     document.getElementById('btn-mpi-stop').disabled = true;
                     
                     if (status.errorMessage) {
-                        document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-exmark" style="color: #ef4444;"></i> Run Error`;
+                        document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Run Error`;
                         alert("MPI Subprocess Error: " + status.errorMessage);
                     } else {
                         document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Run Completed (${status.elapsedTime}s)`;
                         renderFrame(frames.length - 1);
+                        
+                        // Plot this completed run time and speedup on performance Chart
+                        if (performanceChart && status.elapsedTime > 0) {
+                            performanceChart.data.datasets[3].data = [{ x: status.processes, y: status.elapsedTime }];
+                            performanceChart.update();
+                            appendConsole(`[System] Plotted run coordinates (p=${status.processes}, t=${status.elapsedTime}s) on the Performance chart.`);
+                        }
                     }
                 }
             } catch (err) {
@@ -1747,20 +2119,18 @@
             const text = document.getElementById(valId);
             if (!ring || !text) return;
             
-            // Circumference of R=16 circle is 2 * PI * 16 = 100.53
             const circumference = 100.53;
             const offset = circumference - (percent / 100) * circumference;
             
             ring.style.strokeDashoffset = offset;
             text.innerText = `${Math.round(percent)}%`;
             
-            // Dynamically change ring color based on load severity
             if (percent > 85) {
-                ring.style.stroke = "#ef4444"; // Red for overloaded
+                ring.style.stroke = "#ef4444"; 
             } else if (percent > 50) {
-                ring.style.stroke = "#f59e0b"; // Orange/Yellow for heavy load
+                ring.style.stroke = "#f59e0b"; 
             } else {
-                ring.style.stroke = "var(--cyan-accent)"; // Cyan for healthy load
+                ring.style.stroke = "var(--cyan-accent)"; 
             }
         }
 
@@ -1778,7 +2148,6 @@
                 
                 document.getElementById('stat-mpi-traffic').innerText = `${stats.networkTraffic.toFixed(1)} MB/s`;
             } catch (err) {
-                // Backend is offline, show idle stats
                 updateRing("ring-master", "val-master", 0);
                 updateRing("ring-node1", "val-node1", 0);
                 updateRing("ring-node2", "val-node2", 0);
@@ -1793,6 +2162,13 @@
 
         // Initialize WebGL Scene
         init();
+
+        // Initialize HUD panels
+        initPerformanceChart();
+        updateRanksMap(
+            parseInt(document.getElementById('slider-mpi-procs').value),
+            parseInt(document.getElementById('slider-mpi-nodes').value)
+        );
 
     </script>
 </body>
