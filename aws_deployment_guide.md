@@ -282,3 +282,79 @@ Nếu bạn bắt buộc phải demo cụm 4 Compute Nodes (tổng cộng 5 máy
 2. Chọn loại yêu cầu nâng hạn mức cho **Standard (A, C, D, H, I, M, R, T, Z) instances**.
 3. Đề xuất nâng lên hạn mức **`32` vCPUs** hoặc **`64` vCPUs**. AWS thường tự động duyệt yêu cầu này của bạn trong vòng **1 đến 2 giờ** hoàn toàn miễn phí. Sau đó bạn có thể tạo cụm cấu hình cao `c5.xlarge` bình thường.
 
+---
+
+## PHẦN 6: Cấu hình Web Server Nginx trên máy Master
+
+Để biến máy Master thành máy chủ lưu trữ Web thực tế, giúp bạn và thầy cô chỉ cần nhập địa chỉ IP của máy Master (ví dụ: `http://<Master_Public_IP>`) là xem được giao diện mô phỏng 3D ngay lập tức (không cần chạy local file `index.html`), chúng ta sẽ cấu hình Nginx làm Web Server và Reverse Proxy:
+
+### Bước 6.1: Cài đặt Nginx trên máy Master
+SSH vào máy Master và chạy các lệnh:
+```bash
+sudo apt-get update
+sudo apt-get install -y nginx
+```
+
+### Bước 6.2: Copy mã nguồn Front-end vào thư mục Web của Nginx
+Copy tệp giao diện `index.html` vào thư mục gốc chứa trang web mặc định của Nginx:
+```bash
+sudo cp /home/ubuntu/hpc-galaxy-sim/frontend/index.html /var/www/html/index.html
+```
+
+### Bước 6.3: Cấu hình Nginx làm Reverse Proxy
+Chúng ta sẽ cấu hình Nginx tự động chuyển tiếp các cổng:
+* Truy cập `http://<IP_Master>` $\rightarrow$ Hiển thị giao diện Web Dashboard (Cổng 80).
+* Truy cập `http://<IP_Master>/api/...` $\rightarrow$ Nginx tự động chuyển hướng nội bộ sang FastAPI Backend đang chạy ở cổng 8000 (`http://127.0.0.1:8000/api/...`).
+* *Ưu điểm*: Bỏ qua lỗi CORS, không cần mở cổng 8000 trên AWS Security Group nữa (chỉ cần mở cổng 80 chuẩn Web).
+
+Mở tệp cấu hình mặc định của Nginx:
+```bash
+sudo nano /etc/nginx/sites-available/default
+```
+Tìm đến khối cấu hình `server { ... }` và thay thế toàn bộ nội dung của tệp bằng cấu hình dưới đây:
+```nginx
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+
+    root /var/www/html;
+    index index.html;
+
+    server_name _;
+
+    # Phục vụ giao diện tĩnh Web Dashboard
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # Reverse Proxy chuyển tiếp yêu cầu API sang FastAPI Backend
+    location /api {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+*Nhấn `Ctrl + O`, `Enter` để lưu, `Ctrl + X` để thoát.*
+
+### Bước 6.4: Kiểm tra và khởi động lại Nginx
+1. Kiểm tra cú pháp cấu hình xem có bị lỗi chính tả không:
+   ```bash
+   sudo nginx -t
+   ```
+   *(Nếu thấy hiển thị `syntax is ok` và `test is successful` là cấu hình chuẩn).*
+2. Khởi động lại dịch vụ Nginx để áp dụng cấu hình mới:
+   ```bash
+   sudo systemctl restart nginx
+   ```
+
+### 🎈 Hưởng thành quả:
+* **Mở cổng 80 trên AWS**: Đảm bảo Security Group của máy Master đã được mở cổng **HTTP (cổng 80)** cho Anywhere (`0.0.0.0/0`).
+* **Truy cập**: Giờ đây bạn chỉ cần gõ địa chỉ IP công cộng của Master trên trình duyệt máy tính của bạn:  
+  `http://<IP_Public_Cua_Master>`  
+  Giao diện 3D Three.js sẽ hiện ra ngay lập tức và tự động kết nối hoàn hảo với API ở backend!
+
+
