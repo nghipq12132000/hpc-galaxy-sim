@@ -6,7 +6,10 @@ class RunConfig(BaseModel):
     dataset: str
     steps: int
     dt: float
+    master_ip: str
+    node_ips: list[str]
 
 class GenerateConfig(BaseModel):
     particles: int
+
 

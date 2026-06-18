@@ -56,11 +56,22 @@ class SimulationService:
         if config.nodes > 1:
             hostfile_path = os.path.join(BACKEND_DIR, "hostfile")
             try:
-                # Write standard hostfile entries for multi-node simulation
+                # Write custom hostfile listing active node IPs and their MPI slots, excluding Master
                 with open(hostfile_path, "w") as f:
-                    f.write("localhost slots=16\n")
+                    for idx in range(config.nodes):
+                        if idx < len(config.node_ips):
+                            ip = config.node_ips[idx]
+                            slots = (config.processes // config.nodes) + (1 if idx < (config.processes % config.nodes) else 0)
+                            if slots > 0:
+                                f.write(f"{ip} slots={slots}\n")
                 cmd.extend(["--hostfile", hostfile_path])
                 sim_state.logs.append(f"[System] Created MPI hostfile configurations at: {hostfile_path}")
+                
+                # Log the generated hostfile content for verification
+                sim_state.logs.append("[System] Hostfile contents:")
+                with open(hostfile_path, "r") as f:
+                    for line in f:
+                        sim_state.logs.append(f"  {line.strip()}")
             except Exception as e:
                 sim_state.logs.append(f"[Error] Failed to write hostfile: {e}")
                 print(f"Error writing hostfile: {e}", file=sys.stderr)
@@ -74,9 +85,9 @@ class SimulationService:
         # Compile if missing (Linux only)
         if not os.path.exists(mpi_binary) and os.name != 'nt':
             try:
-                sim_state.logs.append("[System] MPI executable not found. Attempting automatic compilation...")
-                subprocess.run(["mpicc", "-O3", os.path.join(SCRIPTS_DIR, "nbody_mpi.c"), "-o", mpi_binary, "-lm"], check=True)
-                sim_state.logs.append("[System] Compilation successful.")
+                sim_state.logs.append("[System] MPI executable not found. Attempting automatic C++ compilation...")
+                subprocess.run(["mpicxx", "-O3", os.path.join(SCRIPTS_DIR, "nbody_mpi.cpp"), "-o", mpi_binary], check=True)
+                sim_state.logs.append("[System] C++ Compilation successful.")
             except Exception as e:
                 sim_state.logs.append(f"[Error] Compilation failed: {e}")
                 print(f"Compilation failed: {e}", file=sys.stderr)

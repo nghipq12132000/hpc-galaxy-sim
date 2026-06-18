@@ -594,6 +594,10 @@
                     <option value="5000">5,000 particles (Standard)</option>
                     <option value="10000" selected>10,000 particles (High)</option>
                     <option value="20000">20,000 particles (Extreme)</option>
+                    <option value="100000">100,000 particles (L-Scale)</option>
+                    <option value="1000000">1,000,000 particles (XL-Scale)</option>
+                    <option value="10000000">10,000,000 particles (Massive)</option>
+                    <option value="100000000">100,000,000 particles (Galactic Max)</option>
                 </select>
             </div>
             <button class="btn btn-accent" id="btn-generate-data" onclick="generateDataset()"><i class="fa-solid fa-wand-magic-sparkles"></i> Generate Data</button>
@@ -831,13 +835,6 @@
             <button class="media-btn" id="btn-prev-frame" onclick="stepBackward()"><i class="fa-solid fa-backward-step"></i></button>
             <button class="media-btn media-btn-large" id="btn-play-pause" onclick="togglePlayPause()"><i class="fa-solid fa-play"></i></button>
             <button class="media-btn" id="btn-next-frame" onclick="stepForward()"><i class="fa-solid fa-forward-step"></i></button>
-            
-            <div style="width: 1px; height: 20px; background: rgba(255, 255, 255, 0.1); margin: 0 10px;"></div>
-
-            <div class="control-group" style="flex-direction: row; align-items: center; gap: 10px;">
-                <span style="font-size: 0.75rem; color: var(--text-secondary);">Playback Speed</span>
-                <input type="range" id="slider-play-speed" min="1" max="10" step="1" value="3" style="width: 100px;">
-            </div>
         </div>
     </div>
 
@@ -878,7 +875,8 @@
         let isPlaying = false;
         let isDemoMode = true;
         let particleCount = 1000;
-        let playInterval = null;
+        let lastFrameTime = 0;
+
 
         // UI Slider references
         const timelineSlider = document.getElementById('timeline-slider');
@@ -1648,24 +1646,12 @@
             if (frames.length === 0) return;
             isPlaying = true;
             playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-            
-            // Retrieve playback delay speed
-            const speedSlider = document.getElementById('slider-play-speed');
-            const playDelay = 200 / parseInt(speedSlider.value); // Milliseconds per frame step
-
-            playInterval = setInterval(() => {
-                let nextFrame = currentFrameIndex + 1;
-                if (nextFrame >= frames.length) {
-                    nextFrame = 0; // Loop simulation playback
-                }
-                renderFrame(nextFrame);
-            }, playDelay);
+            lastFrameTime = performance.now();
         }
 
         function pause() {
             isPlaying = false;
             playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
-            if (playInterval) clearInterval(playInterval);
         }
 
         function stepForward() {
@@ -1675,20 +1661,13 @@
             renderFrame(nextFrame);
         }
 
+        // Cinematic Fly-Through uses play speed too
         function stepBackward() {
             pause();
             let prevFrame = currentFrameIndex - 1;
             if (prevFrame < 0) prevFrame = frames.length - 1;
             renderFrame(prevFrame);
         }
-
-        // Recreate interval on speed change if playing
-        document.getElementById('slider-play-speed').addEventListener('input', () => {
-            if (isPlaying) {
-                pause();
-                play();
-            }
-        });
 
         // Update star sizes dynamically
         starSizeSlider.addEventListener('input', (e) => {
@@ -1761,6 +1740,17 @@
                 document.getElementById('stat-fps').innerText = fps.toFixed(1);
                 frameCount = 0;
                 lastTime = time;
+            }
+
+            // Natural playback update: ~30 FPS (approx 33.3ms per frame)
+            const frameDuration = 33.3; // Milliseconds per frame
+            if (isPlaying && time - lastFrameTime >= frameDuration) {
+                let nextFrame = currentFrameIndex + 1;
+                if (nextFrame >= frames.length) {
+                    nextFrame = 0;
+                }
+                renderFrame(nextFrame);
+                lastFrameTime = time;
             }
 
             // Apply camera motion based on mode
@@ -1926,14 +1916,14 @@
             if (!container) return;
             container.innerHTML = '';
             
-            // Master row (Rank 0 is always there)
-            let masterBadgesHtml = '<span class="rank-badge master-rank">R0</span>';
+            // Master row (does not run computing processes, only coordinates)
+            let masterBadgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Coordinator Only</span>';
             const masterIp = document.getElementById('ip-master').value;
             
-            // Distribute ranks 1 to procs-1 across active nodes
+            // Distribute all ranks 0 to procs-1 across active computing nodes (Node 1 to Node nodes)
             let nodeRanks = Array.from({ length: 4 }, () => []);
-            for (let r = 1; r < procs; r++) {
-                let nodeIdx = (r - 1) % nodes;
+            for (let r = 0; r < procs; r++) {
+                let nodeIdx = r % nodes;
                 nodeRanks[nodeIdx].push(r);
             }
             
@@ -1954,7 +1944,8 @@
                 
                 if (isSelected) {
                     nodeRanks[n].forEach(r => {
-                        badgesHtml += `<span class="rank-badge">R${r}</span>`;
+                        const isMasterRank = r === 0;
+                        badgesHtml += `<span class="rank-badge ${isMasterRank ? 'master-rank' : ''}">R${r}</span>`;
                     });
                     if (badgesHtml === '') {
                         badgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Idle</span>';
@@ -2017,14 +2008,33 @@
                 nodes: parseInt(document.getElementById('slider-mpi-nodes').value),
                 dataset: document.getElementById('select-mpi-dataset').value,
                 steps: parseInt(document.getElementById('slider-mpi-steps').value),
-                dt: 0.01 
+                dt: 0.01,
+                master_ip: document.getElementById('ip-master').value,
+                node_ips: [
+                    document.getElementById('ip-node1').value,
+                    document.getElementById('ip-node2').value,
+                    document.getElementById('ip-node3').value,
+                    document.getElementById('ip-node4').value
+                ]
             };
 
             // Switch UI to Live C++ MPI mode
             isDemoMode = false;
             
-            // Set particleCount to match dataset size
-            const count = config.dataset.includes("10k") ? 10000 : 20000;
+            // Parse particleCount from filename dynamically (e.g. galaxy_collision_10k.txt -> 10000)
+            let count = 10000;
+            const match = config.dataset.match(/_(\d+)(k|m)?\.txt/);
+            if (match) {
+                const num = parseInt(match[1]);
+                const unit = match[2] ? match[2].toLowerCase() : '';
+                if (unit === 'k') {
+                    count = num * 1000;
+                } else if (unit === 'm') {
+                    count = num * 1000000;
+                } else {
+                    count = num;
+                }
+            }
             particleCount = count;
             
             // First load or generate Keplerian demo solver for visual synchronization
@@ -2190,14 +2200,18 @@
                     const opt = document.createElement('option');
                     opt.value = dataset;
                     let label = dataset;
-                    if (dataset.includes("10k")) label = `${dataset} (10k)`;
+                    if (dataset.includes("100m")) label = `${dataset} (100M)`;
+                    else if (dataset.includes("10m")) label = `${dataset} (10M)`;
+                    else if (dataset.includes("1m")) label = `${dataset} (1M)`;
+                    else if (dataset.includes("100k")) label = `${dataset} (100k)`;
                     else if (dataset.includes("20k")) label = `${dataset} (20k)`;
+                    else if (dataset.includes("10k")) label = `${dataset} (10k)`;
                     else if (dataset.includes("5k")) label = `${dataset} (5k)`;
                     else if (dataset.includes("1k")) label = `${dataset} (1k)`;
                     else {
-                        const match = dataset.match(/_(\d+k|\d+)\.txt/);
+                        const match = dataset.match(/_(\d+m|\d+k|\d+)\.txt/);
                         if (match) {
-                            label = `${dataset} (${match[1]})`;
+                            label = `${dataset} (${match[1].toUpperCase()})`;
                         }
                     }
                     opt.innerText = label;

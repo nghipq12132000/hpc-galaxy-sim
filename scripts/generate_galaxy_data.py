@@ -16,10 +16,15 @@ def generate_galaxy(center_pos, center_vel, center_mass, num_stars, min_r, max_r
     G = 1.0
     
     # 2. Generate stars
+    # Scale length of the exponential disk
+    h = 8.0
     for i in range(1, num_stars + 1):
-        # Semi-random distribution in a disc
-        # R follows a power law or uniform distribution
-        r = np.random.uniform(min_r, max_r)
+        # Sample radius r from exponential disk density profile p(r) ~ r * exp(-r/h)
+        # using a Gamma distribution of shape=2
+        r = np.random.gamma(2, h)
+        while r < min_r or r > max_r:
+            r = np.random.gamma(2, h)
+            
         theta = np.random.uniform(0, 2 * np.pi)
         
         # Positions relative to center
@@ -35,13 +40,15 @@ def generate_galaxy(center_pos, center_vel, center_mass, num_stars, min_r, max_r
         # Orbital velocity magnitude v = sqrt(G * M_center / r)
         v_orbit = np.sqrt(G * center_mass / r)
         
+        # Velocity dispersion (approx 15% of circular orbital velocity) representing thermal motion
+        v_disp = 0.15 * v_orbit
+        
         # Orbital velocity vector (perpendicular to radial position vector)
         # For a clockwise or counterclockwise disk rotation
-        # Let's make galaxy 1 and galaxy 2 rotate in opposite directions for visual dynamics
         direction = 1 if galaxy_id == 1 else -1
-        vx_rel = -direction * v_orbit * np.sin(theta)
-        vy_rel = direction * v_orbit * np.cos(theta)
-        vz_rel = 0.0
+        vx_rel = -direction * v_orbit * np.sin(theta) + np.random.normal(0, v_disp)
+        vy_rel = direction * v_orbit * np.cos(theta) + np.random.normal(0, v_disp)
+        vz_rel = np.random.normal(0, v_disp * 0.5)
         
         # Absolute velocities
         vx = center_vel[0] + vx_rel
@@ -79,8 +86,8 @@ def main():
     if len(sys.argv) > 1:
         try:
             N = int(sys.argv[1])
-            if N < 100 or N > 100000:
-                print(f"Error: Particle count must be between 100 and 100,000. Got {N}")
+            if N < 100 or N > 100000000:
+                print(f"Error: Particle count must be between 100 and 100,000,000. Got {N}")
                 sys.exit(1)
             
             stars_per_galaxy = (N // 2) - 1
@@ -89,7 +96,10 @@ def main():
             data = np.vstack((g1_data, g2_data))
             
             # Format output name
-            suffix = f"{N//1000}k" if N % 1000 == 0 else f"{N}"
+            if N >= 1000000:
+                suffix = f"{N//1000000}m" if N % 1000000 == 0 else f"{N/1000000:.1f}m"
+            else:
+                suffix = f"{N//1000}k" if N % 1000 == 0 else f"{N}"
             out_file = os.path.join(dest_dir, f"galaxy_collision_{suffix}.txt")
             np.savetxt(out_file, data, fmt="%.6f %.6f %.6f %.6f %.6f %.6f %.6f")
             print(f"Generated {N} particle data at {out_file}")
