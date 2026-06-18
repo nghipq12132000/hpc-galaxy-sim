@@ -1,46 +1,117 @@
-# Hướng dẫn thiết lập cụm mô phỏng MPI (FastAPI + C++ MPI) trên AWS EC2
+# Hướng dẫn chi tiết thiết lập cụm mô phỏng MPI (FastAPI + C++ MPI) trên AWS EC2
+*(Từng bước click chuột trên AWS Console & Ước tính chi phí chi tiết)*
 
-Tài liệu này hướng dẫn chi tiết cách tạo các máy ảo AWS EC2, cấu hình mạng, thiết lập SSH không mật khẩu (Passwordless SSH), cài đặt môi trường và biên dịch/chạy mô phỏng song song N-Body trên cụm Cluster.
-
----
-
-## 📌 Kiến trúc hệ thống mẫu
-* **1 Master Node (Điều phối)**: Chạy FastAPI Backend API, nhận yêu cầu từ Web Dashboard.
-* **4 Compute Nodes (Tính toán)**: `node1`, `node2`, `node3`, `node4` chịu trách nhiệm chạy các tiến trình MPI.
-* **Hệ điều hành khuyến nghị**: Ubuntu Server 22.04 LTS (Hỗ trợ tốt nhất cho OpenMPI và Python).
+Tài liệu này hướng dẫn chi tiết cách tạo các máy ảo AWS EC2 từ giao diện AWS Console, cấu hình mạng, thiết lập SSH không mật khẩu (Passwordless SSH), cài đặt môi trường, biên dịch/chạy mô phỏng song song N-Body trên cụm Cluster và bảng ước tính chi phí.
 
 ---
 
-## Bước 1: Khởi tạo các AWS EC2 Instances
+## PHẦN 1: Tạo các máy ảo EC2 trên AWS Console (Click-by-click)
 
-### 1. Cấu hình Instance
-Truy cập AWS Console và tiến hành Launch Instances với các thông số:
-* **Name**: `hpc-master`, `hpc-node1`, `hpc-node2`, `hpc-node3`, `hpc-node4`.
-* **OS Image**: Ubuntu Server 22.04 LTS.
-* **Instance Type**: 
-  * `t3.medium` (2 vCPUs, 4GB RAM) hoặc cao hơn (ví dụ: dòng `c5.large` chuyên tính toán) để đảm bảo tốc độ mô phỏng.
-* **Key pair**: Tạo một Key pair mới (ví dụ: `hpc-cluster.pem`) và tải về máy.
+Chúng ta cần tạo tổng cộng **5 máy ảo** (1 Master Node và 4 Compute Nodes). Để tiết kiệm thời gian, chúng ta sẽ tạo cùng một lúc 5 máy ảo rồi đổi tên sau.
 
-### 2. Cấu hình Security Group (Cực kỳ quan trọng)
-Tất cả các máy ảo trong cụm cần nằm chung một Security Group với cấu hình luật (Inbound Rules) như sau:
-1. **Luật SSH**: Cho phép cổng `22` từ địa chỉ IP của bạn (My IP) để truy cập dòng lệnh.
-2. **Luật Backend API**: Cho phép cổng `8000` (hoặc cổng chạy FastAPI) từ IP của bạn hoặc Anywhere (`0.0.0.0/0`) để Web Dashboard ở máy cá nhân gọi API.
-3. **Luật Nội bộ Cluster (Cho phép giao tiếp MPI)**:
-   * Thêm luật: **All traffic** (Tất cả lưu lượng).
-   * Source (Nguồn): **Custom** và nhập **ID của chính Security Group này** (ví dụ: `sg-0123456789abcdef`).
-   * *Giải thích*: MPI sử dụng các cổng ngẫu nhiên rất cao để giao tiếp dữ liệu giữa các tiến trình. Việc mở toàn bộ traffic nội bộ giữa các EC2 có chung Security Group là bắt buộc.
+### Bước 1.1: Truy cập trang quản trị EC2
+1. Đăng nhập vào tài khoản [AWS Management Console](https://aws.amazon.com/console/).
+2. Trên thanh tìm kiếm ở đỉnh màn hình (Search bar), gõ `EC2` và nhấn click vào dịch vụ **EC2** hiển thị đầu tiên.
+3. Ở góc phải phía trên màn hình, chọn **Region** gần Việt Nam nhất để giảm độ trễ (Khuyên dùng: **Singapore** hoặc **Tokyo**).
+
+### Bước 1.2: Cấu hình tạo máy ảo (Launch Instance)
+1. Nhấn nút màu cam **Launch instance** ở giữa màn hình.
+2. Tại mục **Name and tags**:
+   * Nhập tên chung: `hpc-cluster` (Chúng ta sẽ đổi tên riêng sau).
+3. Tại mục **Application and OS Images (Amazon Machine Image - AMI)**:
+   * Click vào tab **Quick Start** (được chọn mặc định).
+   * Click chọn logo của **Ubuntu**.
+   * Tại dropdown **Amazon Machine Image (AMI)**, chọn **Ubuntu Server 22.04 LTS (HVM), SSD Volume Type** (loại 64-bit x86).
+4. Tại mục **Instance type**:
+   * Click chọn dòng máy ảo phù hợp.
+   * *Lựa chọn 1 (Tiết kiệm)*: Chọn `t3.medium` (2 vCPU, 4 GiB RAM).
+   * *Lựa chọn 2 (Hiệu năng cao)*: Chọn `c5.large` (2 vCPU, 4 GiB RAM - Tối ưu cho tính toán số học).
+5. Tại mục **Key pair (login)**:
+   * Click chọn **Create new key pair** nếu bạn chưa có.
+   * **Key pair name**: Gõ `hpc-key`.
+   * **Key pair type**: Chọn `RSA`.
+   * **Private key file format**: Chọn `.pem` (dành cho OpenSSH/Linux/MacOS hoặc PowerShell trên Windows).
+   * Nhấn nút **Create key pair**. Trình duyệt sẽ tự động tải về tệp tin `hpc-key.pem`. Hãy lưu tệp tin này vào thư mục an toàn trên máy của bạn (ví dụ: `C:\Users\Tên_User\.ssh\` hoặc thư mục Downloads).
+6. Tại mục **Network settings**:
+   * Click nút **Edit** ở góc phải trên của bảng Network settings.
+   * **Firewall (security groups)**: Chọn **Create security group**.
+   * **Security group name**: Nhập `hpc-security-group`.
+   * **Description**: Nhập `SG for HPC Galaxy simulation cluster`.
+   * Tại mục cấu hình **Inbound Security Group Rules** (Quy tắc kết nối vào):
+     * Mặc định đã có sẵn Rule 1 cho SSH (Cổng 22). Tại dropdown **Source type**, chọn **My IP** (để chỉ có máy bạn mới SSH được vào, giúp bảo mật tối đa).
+7. Tại mục **Configure storage**:
+   * Mặc định là `8 GiB` gp3. Hãy đổi thành `15 GiB` để thoải mái lưu trữ dữ liệu hạt lớn và môi trường Python venv.
+8. Tại mục **Summary** (Cột bên phải màn hình):
+   * Nhập số lượng máy ảo cần tạo tại ô **Number of instances**: Nhập **`5`**.
+   * Nhấn nút màu cam **Launch instance** ở dưới cùng.
+   * Chờ khoảng 10-15 giây rồi nhấn **View all instances** ở cuối trang để quay lại danh sách máy ảo.
+
+### Bước 1.3: Đổi tên riêng cho các Instances
+Sau khi nhấn View all instances, bạn sẽ thấy 5 máy ảo đang ở trạng thái `Pending` (Đang khởi tạo). 
+1. Click vào biểu tượng **Edit (hình bút chì)** ở cột *Name* của từng máy ảo và đặt lại tên lần lượt:
+   * Máy ảo 1: `hpc-master`
+   * Máy ảo 2: `hpc-node1`
+   * Máy ảo 3: `hpc-node2`
+   * Máy ảo 4: `hpc-node3`
+   * Máy ảo 5: `hpc-node4`
 
 ---
 
-## Bước 2: Thiết lập IP tĩnh nội bộ và Cấu hình Hosts
+## PHẦN 2: Cấu hình Security Group mở cổng giao tiếp cụm (Click-by-click)
 
-Khi khởi chạy, AWS sẽ cấp cho mỗi EC2 một **Private IP** (IP nội bộ) dạng `172.31.X.X`. Hãy ghi lại danh sách Private IP này của tất cả các node.
+Chúng ta cần cho phép:
+* Cổng **8000** để Dashboard ở máy cá nhân gọi tới Backend API của Master.
+* Mở **toàn bộ traffic nội bộ** giữa các node để MPI giao tiếp dữ liệu.
 
-Truy cập vào từng node qua SSH và cập nhật tệp `/etc/hosts` để các node nhận diện tên của nhau thay vì nhớ IP:
+### Bước 2.1: Truy cập Security Group
+1. Tại danh sách máy ảo EC2, click vào tên máy ảo `hpc-master`.
+2. Cuộn xuống dưới màn hình, click vào tab **Security**.
+3. Click vào liên kết của Security Group dưới dòng **Security groups** (có tên dạng `hpc-security-group` hoặc `sg-xxxxxxxx`).
+4. Tại trang chi tiết Security Group, nhấn nút **Edit inbound rules** ở góc phải dưới của bảng Inbound Rules.
+
+### Bước 2.2: Thêm luật mở cổng
+1. Nhấn nút **Add rule** để thêm quy tắc mới (Rule 2):
+   * **Type**: Chọn **Custom TCP**.
+   * **Port range**: Nhập **`8000`**.
+   * **Source**: Chọn **Anywhere-IPv4** (`0.0.0.0/0`) để Web Dashboard từ máy của bạn có thể gọi API vào máy Master.
+2. Nhấn nút **Add rule** tiếp để thêm quy tắc thứ ba (Rule 3 - Quy tắc quan trọng nhất cho MPI):
+   * **Type**: Chọn **All traffic** (Tất cả lưu lượng).
+   * **Source**: Chọn **Custom**.
+   * Ở ô nhập bên cạnh, gõ **`sg-`** hệ thống sẽ tự động hiển thị gợi ý ID của chính Security Group hiện tại của bạn. Click chọn nó (Ví dụ: `sg-0123456789abcdef`).
+   * *Ý nghĩa*: Luật này cho phép tất cả các máy ảo có chung Security Group này được truyền nhận mọi dữ liệu thông qua tất cả các cổng mạng của nhau.
+3. Nhấn nút **Save rules** ở góc phải dưới cùng.
+
+---
+
+## PHẦN 3: Thiết lập mạng & SSH nội bộ
+
+Khi các máy ảo đã ở trạng thái `Running`, hãy ghi lại:
+* **Public IP (IP công cộng)** của máy `hpc-master` (Dùng để kết nối API từ Web Dashboard máy cá nhân của bạn).
+* **Private IP (IP nội bộ)** của tất cả 5 máy.
+
+### Bước 3.1: Đổi quyền tệp khóa Private Key trên máy tính cá nhân
+Mở terminal trên máy tính của bạn (PowerShell trên Windows hoặc Terminal trên macOS/Linux) và di chuyển vào thư mục chứa tệp `hpc-key.pem` đã tải về:
+* **Đối với Windows (PowerShell)**:
+  ```powershell
+  # Đặt quyền chỉ đọc cho tệp khóa
+  icacls.exe .\hpc-key.pem /grant:r "%username%:R"
+  icacls.exe .\hpc-key.pem /inheritance:r
+  ```
+* **Đối với macOS/Linux**:
+  ```bash
+  chmod 400 hpc-key.pem
+  ```
+
+### Bước 3.2: SSH vào máy Master và cấu hình tệp Hosts
+SSH vào máy Master bằng lệnh:
+```bash
+ssh -i hpc-key.pem ubuntu@<IP_Public_Cua_Master>
+```
+Sau khi đăng nhập thành công vào máy Master, mở tệp hosts nội bộ:
 ```bash
 sudo nano /etc/hosts
 ```
-Thêm vào cuối tệp danh sách IP nội bộ của cụm (thay thế bằng IP thực tế của bạn):
+Di chuyển con trỏ xuống cuối tệp và dán thông tin Private IP của các node (thay thế bằng IP nội bộ thực tế của bạn):
 ```text
 172.31.20.10  master
 172.31.20.11  node1
@@ -48,90 +119,66 @@ Thêm vào cuối tệp danh sách IP nội bộ của cụm (thay thế bằng 
 172.31.20.13  node3
 172.31.20.14  node4
 ```
+*Nhấn `Ctrl + O`, tiếp tục nhấn `Enter` để lưu, sau đó nhấn `Ctrl + X` để thoát nano.*
+
+*(Thực hiện tương tự bước chỉnh sửa tệp `/etc/hosts` này trên cả 4 máy compute node bằng cách SSH vào từng máy).*
+
+### Bước 3.3: Tạo khóa SSH nội bộ trên máy `master` và sao chép sang các node
+1. Trên máy Master, chạy lệnh sinh cặp khóa RSA nội bộ (Không đặt mật khẩu khi được hỏi):
+   ```bash
+   ssh-keygen -t rsa -b 2048 -N "" -f ~/.ssh/id_rsa
+   ```
+2. Thêm khóa này vào danh sách truy cập của chính nó:
+   ```bash
+   cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+   ```
+3. Tạo tệp khóa tạm thời `hpc-key.pem` trên máy Master để làm công cụ SSH chuyển tiếp sang các node:
+   ```bash
+   nano ~/.ssh/hpc-key.pem
+   ```
+   *Mở tệp `hpc-key.pem` trên máy cá nhân của bạn bằng Notepad/TextEdit, copy toàn bộ nội dung dán vào cửa sổ Terminal của máy Master. Nhấn `Ctrl + O`, `Enter` để lưu, `Ctrl + X` để thoát.*
+   
+4. Đặt quyền truy cập cho tệp khóa tạm thời trên Master:
+   ```bash
+   chmod 400 ~/.ssh/hpc-key.pem
+   ```
+5. Chạy các lệnh sau để tự động copy khóa công khai từ Master sang các Compute Node mà không cần bạn phải thao tác copy thủ công từng máy:
+   ```bash
+   ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node1
+   ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node2
+   ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node3
+   ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node4
+   ```
+   *(Nhập `yes` nếu được hỏi xác thực kết nối lần đầu).*
+6. Xóa tệp khóa tạm thời để bảo vệ bảo mật của cụm:
+   ```bash
+   rm ~/.ssh/hpc-key.pem
+   ```
 
 ---
 
-## Bước 3: Cấu hình SSH không mật khẩu (Passwordless SSH)
+## PHẦN 4: Cài đặt phần mềm & Biên dịch mã nguồn
 
-Tiến trình MPI khởi chạy bằng lệnh `mpirun` trên máy `master` sẽ cần SSH tự động sang các máy `node1`...`node4` để chạy tiến trình con mà không được hỏi mật khẩu.
-
-### 1. Tạo SSH Key trên máy `master`
-SSH vào máy `master` và chạy lệnh sinh key:
-```bash
-ssh-keygen -t rsa -b 2048 -N "" -f ~/.ssh/id_rsa
-```
-
-### 2. Copy Key từ `master` sang tất cả các Compute Nodes
-Copy khóa công khai (`id_rsa.pub`) từ `master` sang file `authorized_keys` của chính nó và tất cả các node còn lại:
-```bash
-# SSH vào chính master không mật khẩu
-cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-
-# Copy sang các compute nodes (Sử dụng tệp hpc-cluster.pem từ máy cá nhân của bạn để trung chuyển hoặc copy thủ công)
-# Cách chuyên nghiệp: Trên máy master, tạo tạm tệp private key của AWS để copy:
-nano ~/.ssh/hpc-cluster.pem   # Dán nội dung tệp hpc-cluster.pem vào đây
-chmod 400 ~/.ssh/hpc-cluster.pem
-
-# Copy sang từng node
-ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-cluster.pem" ubuntu@node1
-ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-cluster.pem" ubuntu@node2
-ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-cluster.pem" ubuntu@node3
-ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-cluster.pem" ubuntu@node4
-
-# Xóa tệp private key tạm trên master để bảo mật
-rm ~/.ssh/hpc-cluster.pem
-```
-
-### 3. Xác minh kết nối SSH không mật khẩu
-Từ máy `master`, kiểm tra xem có thể SSH tới các node mà không cần mật khẩu hay không:
-```bash
-ssh node1 "hostname"
-ssh node2 "hostname"
-ssh node3 "hostname"
-ssh node4 "hostname"
-```
-*(Nếu mỗi lệnh in ra đúng hostname của node tương ứng mà không yêu cầu nhập mật khẩu hay xác nhận YES/NO là thành công).*
-
----
-
-## Bước 4: Cài đặt Môi trường (Cài đặt trên TẤT CẢ các Node)
-
-Bạn cần chạy các lệnh cài đặt dưới đây trên **cả 5 máy ảo** (`master`, `node1`...`node4`):
+Bạn cần chạy lệnh cài đặt môi trường trên **CẢ 5 MÁYẢO** (Bạn có thể chạy song song trên nhiều tab Terminal hoặc chạy lần lượt):
 
 ```bash
-# Cập nhật hệ thống
+# Cập nhật danh sách gói phần mềm
 sudo apt-get update && sudo apt-get upgrade -y
 
-# Cài đặt trình biên dịch C++ và OpenMPI
+# Cài đặt bộ công cụ phát triển C++ (GCC/G++) và OpenMPI
 sudo apt-get install -y build-essential openmpi-bin openmpi-common libopenmpi-dev git
 
-# Cài đặt Python và Pip (Để chạy backend FastAPI)
+# Cài đặt Python 3 và Pip (Để chạy API điều phối)
 sudo apt-get install -y python3-pip python3-venv python3-dev
 ```
 
-Kiểm tra phiên bản MPI đã được cài đặt thành công:
-```bash
-mpicxx --version
-mpirun --version
-```
-
----
-
-## Bước 5: Cấu hình Thư mục dự án đồng nhất
-
-Để MPI chạy thành công đa node, **mã nguồn, tệp dữ liệu đầu vào và tệp thực thi biên dịch phải nằm ở cùng một đường dẫn tuyệt đối trên tất cả các node** (ví dụ: `/home/ubuntu/hpc-galaxy-sim`).
-
-### Cách 1: Sử dụng Hệ thống file chia sẻ NFS (Khuyến nghị cho Cluster)
-Giúp chia sẻ thư mục `/home/ubuntu/hpc-galaxy-sim` từ `master` sang các `node` qua mạng, không cần copy thủ công.
-*(Tham khảo cài đặt nhanh NFS-Kernel-Server trên Master và NFS-Common trên các Node).*
-
-### Cách 2: Sao chép thủ công (Đơn giản nhất để thử nghiệm)
-1. Trên máy `master`, tải mã nguồn từ Git về thư mục home:
+### Bước 4.1: Đồng bộ hóa mã nguồn sang các Compute Node
+1. Trên máy Master, tải mã nguồn từ kho GitHub của bạn:
    ```bash
    cd /home/ubuntu
    git clone https://github.com/nghipq12132000/hpc-galaxy-sim.git
    ```
-2. Thực hiện đồng bộ thư mục dự án từ `master` sang các node bằng lệnh `rsync`:
+2. Thiết lập đồng bộ hóa sang các Node tính toán (Chạy các lệnh rsync này từ máy Master):
    ```bash
    rsync -avz /home/ubuntu/hpc-galaxy-sim/ ubuntu@node1:/home/ubuntu/hpc-galaxy-sim/
    rsync -avz /home/ubuntu/hpc-galaxy-sim/ ubuntu@node2:/home/ubuntu/hpc-galaxy-sim/
@@ -139,59 +186,65 @@ Giúp chia sẻ thư mục `/home/ubuntu/hpc-galaxy-sim` từ `master` sang các
    rsync -avz /home/ubuntu/hpc-galaxy-sim/ ubuntu@node4:/home/ubuntu/hpc-galaxy-sim/
    ```
 
----
+### Bước 4.2: Biên dịch mã nguồn MPI
+1. Trên máy Master, di chuyển vào thư mục dự án và chạy trình biên dịch `mpicxx`:
+   ```bash
+   cd /home/ubuntu/hpc-galaxy-sim
+   mpicxx -O3 scripts/nbody_mpi.cpp -o scripts/nbody_mpi
+   ```
+2. Đồng bộ tệp nhị phân vừa biên dịch sang các Node để tránh phải biên dịch lại trên từng máy:
+   ```bash
+   for node in node1 node2 node3 node4; do
+       rsync -avz /home/ubuntu/hpc-galaxy-sim/scripts/nbody_mpi ubuntu@$node:/home/ubuntu/hpc-galaxy-sim/scripts/nbody_mpi
+   done
+   ```
 
-## Bước 6: Biên dịch mã nguồn C++ MPI
-
-Trên máy `master`, truy cập thư mục dự án và tiến hành biên dịch mã nguồn MPI:
-```bash
-cd /home/ubuntu/hpc-galaxy-sim
-mpicxx -O3 scripts/nbody_mpi.cpp -o scripts/nbody_mpi
-```
-
-Sau khi biên dịch xong trên `master`, hãy đồng bộ tệp thực thi `nbody_mpi` sang tất cả các compute nodes để đảm bảo cấu trúc giống hệt nhau:
-```bash
-# Đồng bộ tệp thực thi mới sang các node tính toán
-for node in node1 node2 node3 node4; do
-    rsync -avz /home/ubuntu/hpc-galaxy-sim/scripts/nbody_mpi ubuntu@$node:/home/ubuntu/hpc-galaxy-sim/scripts/nbody_mpi
-done
-```
-
----
-
-## Bước 7: Cài đặt và Khởi chạy Backend FastAPI (Chỉ trên máy `master`)
-
+### Bước 4.3: Chạy ứng dụng FastAPI Backend (Chỉ trên máy Master)
 1. Truy cập thư mục backend:
    ```bash
    cd /home/ubuntu/hpc-galaxy-sim/backend
    ```
-2. Tạo và kích hoạt môi trường ảo Python:
+2. Khởi tạo môi trường ảo Python và kích hoạt:
    ```bash
    python3 -m venv venv
    source venv/bin/activate
    ```
-3. Cài đặt các thư viện phụ thuộc:
+3. Cài đặt các thư viện cần thiết:
    ```bash
    pip install -r requirements.txt
    ```
-4. Khởi chạy Uvicorn server chạy ngầm ở cổng `8000`:
+4. Chạy Backend API ngầm để phục vụ Dashboard:
    ```bash
-   # Chạy ngầm server bằng nohup để không bị tắt khi ngắt SSH
    nohup python3 run.py > uvicorn.log 2>&1 &
    ```
-   *Mẹo*: Bạn có thể kiểm tra xem backend chạy thành công hay chưa bằng cách xem file log: `tail -f uvicorn.log`.
+5. Đảm bảo backend đang chạy đúng bằng cách kiểm tra log:
+   ```bash
+   tail -n 10 uvicorn.log
+   ```
+   *(Nếu thấy dòng `Uvicorn running on http://0.0.0.0:8000` là thành công).*
 
 ---
 
-## Bước 8: Kết nối Web Dashboard với AWS Cluster
+## PHẦN 5: Ước tính chi phí vận hành cụm Cluster trong 1 giờ (AWS Singapore)
 
-1. Mở tệp `frontend/index.html` bằng trình duyệt trên máy tính cá nhân của bạn.
-2. Tại bảng điều khiển bên trái, cấu hình các thông số mạng:
-   * **Master IP**: Nhập **Public IP** của máy `master` (IP ngoại网 để kết nối API).
-   * **Node 1 IP**: Nhập Private IP của `node1` (ví dụ: `172.31.20.11`).
-   * **Node 2 IP**: Nhập Private IP của `node2`.
-   * **Node 3 IP**: Nhập Private IP của `node3`.
-   * **Node 4 IP**: Nhập Private IP của `node4`.
-3. Nhấp chọn số lượng Tiến trình (`Processes`) và số lượng `Compute Nodes` muốn phân bổ.
-4. Giao diện **MPI Ranks Mapping** sẽ hiển thị sơ đồ phân chia luồng tính toán từ `R0` trở đi bắt đầu tại Node 1 (Master chỉ làm nhiệm vụ coordinator điều phối lệnh).
-5. Nhấp nút **Run MPI** để kích hoạt cuộc mô phỏng. Logs stdout tính toán song song từ cụm Cluster AWS sẽ được truyền về hiển thị thời gian thực trên màn hình Terminal của Web Dashboard!
+Dưới đây là bảng ước tính chi phí cho cụm 5 Instances chạy trong **1 giờ** (giá tính theo On-Demand Instance tại khu vực Singapore / Tokyo):
+
+| Thành phần | Số lượng | Cấu hình kỹ thuật | Đơn giá / Giờ (USD) | Tổng chi phí / Giờ (USD) | Tổng chi phí / Giờ (VND) |
+| :--- | :---: | :--- | :---: | :---: | :---: |
+| **Máy ảo t3.medium** | 5 | 2 vCPUs, 4 GiB RAM | $0.0416 | **$0.208** | ~5.200 VND |
+| **Ổ cứng SSD gp3** | 5 (15GB/máy) | 75 GB tổng dung lượng | $0.0001 | **$0.005** | ~120 VND |
+| **Data Transfer** | - | Nhận dữ liệu (Free) / Xuất log nhẹ | $0.09 / GB | **$0.002** | ~50 VND |
+| **TỔNG CỘNG (Mức Tiêu chuẩn)** | **5** | **Cụm 10 vCPUs, 20 GiB RAM** | | **$0.215** | **~5.370 VND** |
+
+### Nếu nâng cấp lên máy ảo tối ưu tính toán (Compute Optimized - Khuyên dùng cho mô phỏng):
+
+| Thành phần | Số lượng | Cấu hình kỹ thuật | Đơn giá / Giờ (USD) | Tổng chi phí / Giờ (USD) | Tổng chi phí / Giờ (VND) |
+| :--- | :---: | :--- | :---: | :---: | :---: |
+| **Máy ảo c5.large** | 5 | 2 vCPUs, 4 GiB (Compute) | $0.0850 | **$0.425** | ~10.600 VND |
+| **Ổ cứng gp3 + Mạng** | 5 | 75 GB SSD | - | **$0.007** | ~170 VND |
+| **TỔNG CỘNG (Mức Hiệu năng)** | **5** | **Cụm 10 vCPUs, 20 GiB RAM** | | **$0.432** | **~10.770 VND** |
+
+> [!TIP]
+> **Cách tiết kiệm chi phí tối đa**:
+> 1. Khi dừng thí nghiệm/không sử dụng nữa, hãy truy cập AWS Console, chọn cả 5 instances, nhấn **Instance state** -> chọn **Terminate instance** (Xóa hoàn toàn máy ảo) hoặc **Stop instance** (Tạm dừng máy ảo, khi stop chỉ mất tiền lưu trữ SSD rất rẻ khoảng 150đ/máy/ngày, không mất tiền máy ảo chạy).
+> 2. Nếu tài khoản AWS của bạn mới tạo (trong vòng 12 tháng), bạn sẽ được hưởng chính sách **AWS Free Tier** (Miễn phí 750 giờ chạy máy ảo `t2.micro` hoặc `t3.micro` hàng tháng). Tuy nhiên do RAM của `micro` hơi thấp (1-2GB), việc biên dịch hoặc sinh 100M hạt sẽ bị tràn bộ nhớ (Out of Memory). Bạn nên dùng `t3.medium` trở lên để chạy thử nghiệm ổn định.
