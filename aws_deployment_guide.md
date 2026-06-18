@@ -247,6 +247,25 @@ Bảng chi phí chi tiết cho **1 giờ** hoạt động:
   * **Processes (p)**: Kéo chọn **`16`** processes.
 * Sơ đồ **MPI Ranks Mapping** sẽ tự động tính toán phân bố đều: mỗi máy ảo Compute Node chạy đúng **4 MPI processes** tương ứng với 4 vCPUs của dòng máy ảo `c5.xlarge` đã tạo, giúp tận dụng tối đa 100% công suất tính toán của cụm AWS Cluster!
 
+### 💾 Chi phí duy trì Ổ cứng SSD gp3 khi TẮT máy (Stop Instance) từ 18/6 đến 25/6 (7 ngày):
+
+Khi bạn **Tắt máy ảo (Stop)** để tạm nghỉ, CPU và RAM của máy ảo sẽ được giải phóng hoàn toàn và không tính phí. Tuy nhiên, ổ cứng lưu trữ SSD (EBS gp3 Volume) vẫn được AWS giữ lại để bảo vệ hệ điều hành, môi trường OpenMPI và code của bạn. Phần dung lượng này **vẫn sẽ bị tính phí**.
+
+Giá lưu trữ ổ đĩa gp3 SSD tại Singapore là **$0.08 / GB / tháng** (30 ngày). 
+Dưới đây là chi phí dự tính cho 1 tuần (18/6 - 25/6) duy trì cụm khi tắt máy:
+
+* **Đối với Cụm 5 máy ảo (1 Master + 4 Compute Nodes - Tổng 75 GB SSD)**:
+  * Chi phí 1 tháng: $75\text{ GB} \times 0.08 = \$6.00\text{ USD}$ (~150.000 VND).
+  * Chi phí 1 ngày: $\$6.00 / 30 \text{ ngày} = \$0.20\text{ USD}$ (~5.000 VND).
+  * **Chi phí duy trì 1 tuần (18/6 - 25/6)**: $\$0.20 \times 7\text{ ngày} = \mathbf{\$1.40\text{ USD}}$ (khoảng **~35.000 VND**).
+
+* **Đối với Cụm 4 máy ảo (1 Master + 3 Compute Nodes - Tổng 60 GB SSD)**:
+  * Chi phí 1 tháng: $60\text{ GB} \times 0.08 = \$4.80\text{ USD}$ (~120.000 VND).
+  * Chi phí 1 ngày: $\$4.80 / 30 \text{ ngày} = \$0.16\text{ USD}$ (~4.000 VND).
+  * **Chi phí duy trì 1 tuần (18/6 - 25/6)**: $\$0.16 \times 7\text{ ngày} = \mathbf{\$1.12\text{ USD}}$ (khoảng **~28.000 VND**).
+
+*Mẹo tiết kiệm*: Nếu bạn muốn ngắt hoàn toàn mọi chi phí phát sinh khi dừng nghiên cứu lâu ngày, bạn có thể tạo một bản sao lưu ảnh đĩa (Create AMI) của các máy ảo rồi Terminate (Xóa hẳn) máy ảo đó đi. Khi cần làm việc lại, bạn chỉ cần khởi chạy cụm máy mới từ AMI đã sao lưu mà không phải cài đặt lại từ đầu!
+
 ---
 
 ## 🛠 Xử lý lỗi: "vCPU capacity limit exceeded (Limit: 8 vCPUs)"
