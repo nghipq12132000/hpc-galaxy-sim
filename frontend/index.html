@@ -1826,6 +1826,42 @@
                 }
             });
         }
+
+        // --- Tải cấu hình từ file .env ---
+        async function loadEnvConfig() {
+            try {
+                const response = await fetch('.env');
+                if (!response.ok) return;
+                const text = await response.text();
+                const lines = text.split('\n');
+                for (let line of lines) {
+                    line = line.trim();
+                    if (line.startsWith('#') || line === '') continue;
+                    const parts = line.split('=');
+                    if (parts.length >= 2) {
+                        const key = parts[0].trim();
+                        const val = parts.slice(1).join('=').trim();
+                        if (key === 'API_URL') {
+                            let cleanedVal = val;
+                            if (cleanedVal.endsWith('/')) cleanedVal = cleanedVal.slice(0, -1);
+                            if (!cleanedVal.endsWith('/api')) cleanedVal += '/api';
+                            API_BASE = cleanedVal;
+                            
+                            const input = document.getElementById('api-server-url');
+                            if (input) {
+                                input.value = val;
+                            }
+                            appendConsole(`[System] Loaded API URL from .env: ${val}`);
+                            break;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.log("No .env file found or unable to parse. Using default config.", err);
+            }
+        }
+        
+        loadEnvConfig();
         let mpiPollInterval = null;
         let monitorInterval = null;
         let isMpiRunning = false;
