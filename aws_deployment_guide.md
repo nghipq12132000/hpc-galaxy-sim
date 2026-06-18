@@ -315,9 +315,10 @@ sudo apt-get install -y nginx
 ```
 
 ### Bước 6.2: Copy mã nguồn Front-end vào thư mục Web của Nginx
-Copy tệp giao diện `index.html` vào thư mục gốc chứa trang web mặc định của Nginx:
+Copy tệp giao diện `index.html` và tệp cấu hình `.env` vào thư mục gốc chứa trang web mặc định của Nginx để trình duyệt có thể truy cập được:
 ```bash
 sudo cp /home/ubuntu/hpc-galaxy-sim/frontend/index.html /var/www/html/index.html
+sudo cp /home/ubuntu/hpc-galaxy-sim/frontend/.env /var/www/html/.env
 ```
 
 ### Bước 6.3: Cấu hình Nginx làm Reverse Proxy
