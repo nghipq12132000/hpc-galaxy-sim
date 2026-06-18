@@ -246,3 +246,39 @@ Bảng chi phí chi tiết cho **1 giờ** hoạt động:
   * **Compute Nodes**: Kéo chọn **`4`** nodes.
   * **Processes (p)**: Kéo chọn **`16`** processes.
 * Sơ đồ **MPI Ranks Mapping** sẽ tự động tính toán phân bố đều: mỗi máy ảo Compute Node chạy đúng **4 MPI processes** tương ứng với 4 vCPUs của dòng máy ảo `c5.xlarge` đã tạo, giúp tận dụng tối đa 100% công suất tính toán của cụm AWS Cluster!
+
+---
+
+## 🛠 Xử lý lỗi: "vCPU capacity limit exceeded (Limit: 8 vCPUs)"
+Nếu bạn sử dụng tài khoản AWS mới hoặc tài khoản Free Tier, AWS mặc định chỉ cấp hạn mức sử dụng tối đa **8 vCPUs** cho toàn bộ các máy ảo của bạn. 
+* Máy Master (`t3.medium`) đã sử dụng **2 vCPUs**.
+* Nếu bạn khởi tạo 4 Compute Nodes loại `c5.xlarge` (mỗi node 4 vCPUs $\times$ 4 = 16 vCPUs), tổng số vCPU yêu cầu là 18 vCPUs, vượt quá giới hạn 8 vCPUs nên AWS báo lỗi `Instance launch failed`.
+
+### 💡 Giải pháp 1: Giảm số Node xuống 3 máy và hạ cấu hình (Khuyên dùng - Không cần nâng hạn mức)
+Bạn có thể cấu hình cụm Cluster của mình vừa khít với **8 vCPUs** giới hạn bằng cách:
+1. **Master Node**: Vẫn giữ nguyên **`t3.medium`** (2 vCPUs, 4 GiB RAM).
+2. **Compute Nodes**: Giảm xuống **3 Compute Nodes** (node1, node2, node3) và sử dụng loại máy ảo **`t3.medium`** hoặc **`c5.large`** (đều có **2 vCPUs**, 4 GiB RAM).
+   * **Tổng số vCPUs**: $2 \text{ (Master)} + 3 \text{ Nodes} \times 2 = \mathbf{8 \text{ vCPUs}}$ (Đạt ngưỡng tối đa cho phép).
+   * **Cấu hình trên Dashboard**: Chọn **`3` Compute Nodes** và **`6` Processes** (Mỗi Node chạy 2 processes tương ứng 2 vCPU).
+
+Bảng chi phí 1 giờ cho giải pháp này:
+
+| Máy ảo | Số lượng | Cấu hình | Đơn giá / Giờ | Tổng cộng / Giờ |
+| :--- | :---: | :--- | :---: | :---: |
+| **Master Node (t3.medium)** | 1 | 2 vCPUs, 4 GiB RAM | $0.0416 | **$0.0416** (~1.040đ) |
+| **Compute Nodes (c5.large)** | 3 | 2 vCPUs, 4 GiB RAM | $0.0850 | **$0.2550** (~6.370đ) |
+| **Ổ cứng SSD gp3** | 4 | 60 GB tổng | $0.0001 | **$0.0040** (~100đ) |
+| **TỔNG CỘNG** | **4** | **Cụm 8 vCPUs, 16 GiB RAM** | | **$0.3006** (~7.510đ) |
+
+### 💡 Giải pháp 2: Giữ nguyên 4 Compute Nodes nhưng dùng máy 1 vCPU
+Nếu bạn bắt buộc phải demo cụm 4 Compute Nodes (tổng cộng 5 máy ảo bao gồm cả Master):
+1. **Master Node**: Chọn loại **`t2.small`** (1 vCPU, 2 GiB RAM).
+2. **Compute Nodes**: Chọn 4 máy loại **`t2.micro`** (1 vCPU, 1 GiB RAM).
+   * **Tổng số vCPUs**: $1 \text{ (Master)} + 4 \times 1 \text{ (Nodes)} = \mathbf{5 \text{ vCPUs}}$ (Thoải mái nằm trong hạn mức 8 vCPUs).
+   * **Cấu hình trên Dashboard**: Chọn **`4` Compute Nodes** và **`4` Processes** (Mỗi Node chạy 1 process tương ứng 1 vCPU).
+
+### 💡 Giải pháp 3: Gửi yêu cầu nâng hạn mức vCPU của AWS (Miễn phí)
+1. Click vào liên kết báo lỗi trong AWS Console hoặc truy cập: [http://aws.amazon.com/contact-us/ec2-request](http://aws.amazon.com/contact-us/ec2-request)
+2. Chọn loại yêu cầu nâng hạn mức cho **Standard (A, C, D, H, I, M, R, T, Z) instances**.
+3. Đề xuất nâng lên hạn mức **`32` vCPUs** hoặc **`64` vCPUs**. AWS thường tự động duyệt yêu cầu này của bạn trong vòng **1 đến 2 giờ** hoàn toàn miễn phí. Sau đó bạn có thể tạo cụm cấu hình cao `c5.xlarge` bình thường.
+
