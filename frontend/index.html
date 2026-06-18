@@ -659,6 +659,13 @@
             
             <div class="control-group">
                 <div class="control-label">
+                    <span>API Server URL</span>
+                </div>
+                <input type="text" id="api-server-url" value="" placeholder="e.g. http://18.183.150.246:8000" style="width: 100%; background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px; padding: 6px; color: var(--text-primary); font-size: 0.75rem; font-family: monospace;">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
                     <span>Processes (p)</span>
                     <span id="lbl-mpi-procs" class="control-val">4</span>
                 </div>
@@ -1799,9 +1806,26 @@
         });
 
         // --- MPI Backend API Integration ---
-        const API_BASE = window.location.protocol === 'file:' 
+        let API_BASE = window.location.protocol === 'file:' 
             ? "http://localhost:8000/api" 
             : window.location.origin + "/api";
+
+        const apiServerUrlInput = document.getElementById('api-server-url');
+        if (apiServerUrlInput) {
+            apiServerUrlInput.value = API_BASE.endsWith('/api') ? API_BASE.slice(0, -4) : API_BASE;
+            apiServerUrlInput.addEventListener('input', (e) => {
+                let val = e.target.value.trim();
+                if (!val) {
+                    API_BASE = window.location.protocol === 'file:' 
+                        ? "http://localhost:8000/api" 
+                        : window.location.origin + "/api";
+                } else {
+                    if (val.endsWith('/')) val = val.slice(0, -1);
+                    if (!val.endsWith('/api')) val += '/api';
+                    API_BASE = val;
+                }
+            });
+        }
         let mpiPollInterval = null;
         let monitorInterval = null;
         let isMpiRunning = false;
