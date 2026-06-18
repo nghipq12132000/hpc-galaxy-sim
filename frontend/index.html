@@ -675,6 +675,14 @@
 
             <div class="control-group">
                 <div class="control-label">
+                    <span>Simulation Duration</span>
+                    <span id="lbl-mpi-duration" class="control-val">8.0 Billion Years</span>
+                </div>
+                <input type="range" id="slider-mpi-duration" min="2.0" max="12.0" step="0.5" value="8.0">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
                     <span>Dataset</span>
                 </div>
                 <select id="select-mpi-dataset" class="btn" style="width: 100%; text-align: left; background: rgba(17, 24, 39, 0.9); border: 1px solid rgba(255, 255, 255, 0.1);">
@@ -683,13 +691,7 @@
                 </select>
             </div>
 
-            <div class="control-group">
-                <div class="control-label">
-                    <span>Steps</span>
-                    <span id="lbl-mpi-steps" class="control-val">100</span>
-                </div>
-                <input type="range" id="slider-mpi-steps" min="50" max="500" step="50" value="100">
-            </div>
+
 
             <div class="control-group">
                 <div class="control-label" style="margin-top: 3px;">
@@ -1106,12 +1108,12 @@
             const centers_y2 = new Float32Array(totalSteps);
             const centers_z2 = new Float32Array(totalSteps);
 
-            const g1_cx = -50.0, g1_cy = 0.0, g1_cz = 0.0;
-            const g1_cvx = 3.2, g1_cvy = 0.6, g1_cvz = 0.0; // Small transverse velocity for swing-by
+            const g1_cx = -80.0, g1_cy = 0.0, g1_cz = 0.0;
+            const g1_cvx = 2.0, g1_cvy = 0.4, g1_cvz = 0.0; // Small transverse velocity for swing-by
             const g1_mass = 22000.0;
 
-            const g2_cx = 50.0, g2_cy = 0.0, g2_cz = 0.0;
-            const g2_cvx = -3.2, g2_cvy = -0.6, g2_cvz = 0.0;
+            const g2_cx = 80.0, g2_cy = 0.0, g2_cz = 0.0;
+            const g2_cvx = -2.0, g2_cvy = -0.4, g2_cvz = 0.0;
             const g2_mass = 22000.0;
 
             // Step 1: Pre-calculate the trajectory of the two supermassive centers
@@ -1260,12 +1262,14 @@
             
             // Allow DOM to render loading text
             setTimeout(() => {
+                const duration = parseFloat(document.getElementById('slider-mpi-duration').value);
                 const demoN = parseInt(document.getElementById('slider-demo-n').value);
                 const demoEps = parseFloat(document.getElementById('slider-demo-epsilon').value);
                 
                 isDemoMode = true;
                 particleCount = demoN;
-                frames = runNBodySolver(particleCount, demoEps, 250, 0.15);
+                const steps = Math.round(duration / 0.016);
+                frames = runNBodySolver(particleCount, demoEps, steps, 0.16);
                 
                 currentFrameIndex = 0;
                 
@@ -1489,7 +1493,7 @@
 
             // Update UI status details
             document.getElementById('stat-step').innerText = `${index + 1} / ${frames.length}`;
-            document.getElementById('stat-sim-time').innerText = `${(index * 0.05).toFixed(2)}s`;
+            document.getElementById('stat-sim-time').innerText = `${(index * 0.016).toFixed(3)} Billion Years`;
             timelineSlider.value = index;
         }
 
@@ -1988,8 +1992,11 @@
             document.getElementById('lbl-mpi-nodes').innerText = nodes;
             updateRanksMap(parseInt(document.getElementById('slider-mpi-procs').value), nodes);
         });
-        document.getElementById('slider-mpi-steps').addEventListener('input', (e) => {
-            document.getElementById('lbl-mpi-steps').innerText = e.target.value;
+        document.getElementById('slider-mpi-duration').addEventListener('input', (e) => {
+            document.getElementById('lbl-mpi-duration').innerText = parseFloat(e.target.value).toFixed(1) + " Billion Years";
+            if (isDemoMode) {
+                recalculateDemo();
+            }
         });
 
         // Add input listeners for cluster IPs
@@ -2003,12 +2010,15 @@
         });
 
         async function runMpiSimulation() {
+            const duration = parseFloat(document.getElementById('slider-mpi-duration').value);
+            const stepsCount = Math.round(duration / 0.016);
+            
             const config = {
                 processes: parseInt(document.getElementById('slider-mpi-procs').value),
                 nodes: parseInt(document.getElementById('slider-mpi-nodes').value),
                 dataset: document.getElementById('select-mpi-dataset').value,
-                steps: parseInt(document.getElementById('slider-mpi-steps').value),
-                dt: 0.01,
+                steps: stepsCount,
+                dt: 0.16,
                 master_ip: document.getElementById('ip-master').value,
                 node_ips: [
                     document.getElementById('ip-node1').value,
@@ -2039,7 +2049,7 @@
             
             // First load or generate Keplerian demo solver for visual synchronization
             document.getElementById('lbl-status').innerHTML = '<i class="fa-solid fa-gears fa-spin"></i> Initializing mesh...';
-            frames = runNBodySolver(particleCount, 0.8, config.steps, 0.15);
+            frames = runNBodySolver(particleCount, 0.8, config.steps, 0.16);
             initOrUpdateParticleMesh();
             updateTimelineControls();
             renderFrame(0);

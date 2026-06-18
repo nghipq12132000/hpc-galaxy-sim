@@ -99,14 +99,15 @@ class SimulationService:
                 sim_state.logs.append("[System] mpirun/MPI binary not available. Running in local simulated mode...")
                 
                 # Setup simulation run parameters
-                sim_state.logs.append("Starting simulation: 100 steps, dt = 0.0100 on 4 processes...")
+                sim_state.logs.append(f"Starting simulation: {config.steps} steps, dt = {config.dt:.4f} on {config.processes} processes...")
                 sim_state.logs.append("Initialization and Scattering time: 0.1420 seconds.")
                 
+                sleep_time = max(0.001, 2.5 / config.steps)
                 for step in range(config.steps):
                     if not sim_state.is_running:
                         sim_state.logs.append("[System] Simulation aborted by user.")
                         break
-                    time.sleep(0.05)
+                    time.sleep(sleep_time)
                     sim_state.current_step = step + 1
                     sim_state.elapsed_time = time.time() - sim_state.start_time
                     

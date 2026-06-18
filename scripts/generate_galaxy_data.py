@@ -68,12 +68,12 @@ def main():
     np.random.seed(42)
     
     # Parameters
-    g1_pos = np.array([-50.0, 0.0, 0.0])
-    g1_vel = np.array([3.2, 0.6, 0.0]) # has minor y component for non-head-on collision
+    g1_pos = np.array([-80.0, 0.0, 0.0])
+    g1_vel = np.array([2.0, 0.4, 0.0]) # has minor y component for non-head-on collision
     g1_mass = 22000.0
     
-    g2_pos = np.array([50.0, 0.0, 0.0])
-    g2_vel = np.array([-3.2, -0.6, 0.0])
+    g2_pos = np.array([80.0, 0.0, 0.0])
+    g2_vel = np.array([-2.0, -0.4, 0.0])
     g2_mass = 22000.0
     
     script_dir = os.path.dirname(os.path.abspath(__file__))

@@ -9,7 +9,7 @@
 #include <mpi.h>      // Thư viện MPI cho tính toán song song phân tán
 
 #define G 1.0         // Hằng số hấp dẫn tỷ lệ dùng trong mô phỏng
-#define EPSILON 0.001  // Hệ số làm mềm lực (softening factor) để tránh chia cho 0 khi các hạt tiến quá sát nhau
+#define EPSILON 0.8  // Hệ số làm mềm lực (softening factor) để tránh chia cho 0 khi các hạt tiến quá sát nhau
 
 // Hàm đo thời gian hệ thống trả về thời gian dạng giây kiểu thực double
 double get_time() {
@@ -77,23 +77,23 @@ int main(int argc, char **argv) {
                 double r = 5.0 + ((double)rand() / RAND_MAX) * 25.0;     // Sinh bán kính r ngẫu nhiên từ 5 đến 30
                 
                 if (i < half_n) { // Các hạt thuộc Thiên hà 1 (trái)
-                    master_x[i] = -50.0 + r * cos(theta);
+                    master_x[i] = -80.0 + r * cos(theta);
                     master_y[i] = r * sin(theta);
                     master_z[i] = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
                     
                     double v_orbit = sqrt(G * 22000.0 / r); // Vận tốc quỹ đạo Keplerian tròn
-                    master_vx[i] = 3.2 - v_orbit * sin(theta); // Cộng tịnh tiến vận tốc thiên hà
-                    master_vy[i] = 0.6 + v_orbit * cos(theta);
+                    master_vx[i] = 2.0 - v_orbit * sin(theta); // Cộng tịnh tiến vận tốc thiên hà chậm hơn
+                    master_vy[i] = 0.4 + v_orbit * cos(theta);
                     master_vz[i] = 0.0;
                     master_mass[i] = (i == 0) ? 22000.0 : 0.1 + ((double)rand() / RAND_MAX) * 0.9;
                 } else { // Các hạt thuộc Thiên hà 2 (phải)
-                    master_x[i] = 50.0 + r * cos(theta);
+                    master_x[i] = 80.0 + r * cos(theta);
                     master_y[i] = r * sin(theta);
                     master_z[i] = ((double)rand() / RAND_MAX) * 2.0 - 1.0;
                     
                     double v_orbit = sqrt(G * 22000.0 / r);
-                    master_vx[i] = -3.2 + v_orbit * sin(theta);
-                    master_vy[i] = -0.6 - v_orbit * cos(theta);
+                    master_vx[i] = -2.0 + v_orbit * sin(theta);
+                    master_vy[i] = -0.4 - v_orbit * cos(theta);
                     master_vz[i] = 0.0;
                     master_mass[i] = (i == half_n) ? 22000.0 : 0.1 + ((double)rand() / RAND_MAX) * 0.9;
                 }

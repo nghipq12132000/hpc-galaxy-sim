@@ -9,7 +9,7 @@
 #include <sys/time.h> // Thư viện đo thời gian hệ thống Unix/Linux
 
 #define G 1.0        // Hằng số hấp dẫn tỷ lệ trong mô phỏng
-#define EPSILON 0.001 // Hệ số làm mềm lực (softening factor) tránh chia cho 0 khi va chạm gần
+#define EPSILON 0.8 // Hệ số làm mềm lực (softening factor) tránh chia cho 0 khi va chạm gần
 
 // Cấu trúc hệ thống hạt sử dụng định dạng SoA (Structure of Arrays) để tối ưu hóa truy cập bộ nhớ cache
 struct ParticleSystem {
@@ -75,23 +75,23 @@ void init_random_system(ParticleSystem &sys, int n) {
         double r = 5.0 + ((double)rand() / RAND_MAX) * 25.0;     // Sinh bán kính r ngẫu nhiên từ 5 đến 30 đơn vị
         
         if (i < half_n) {         // Cài đặt các thông số cho hạt thuộc Thiên hà 1 (nằm bên trái)
-            sys.x[i] = -50.0 + r * cos(theta); // Tọa độ x lệch về tâm -50
+            sys.x[i] = -80.0 + r * cos(theta); // Tọa độ x lệch về tâm -80
             sys.y[i] = r * sin(theta);         // Tọa độ y xoay tròn quanh tâm
             sys.z[i] = ((double)rand() / RAND_MAX) * 2.0 - 1.0; // Tọa độ z (độ dày đĩa ngẫu nhiên)
             
             double v_orbit = sqrt(G * 22000.0 / r); // Tính vận tốc quỹ đạo Keplerian v = sqrt(G*M/r)
-            sys.vx[i] = 3.2 - v_orbit * sin(theta); // Thành phần vận tốc vx kèm theo vận tốc tịnh tiến thiên hà
-            sys.vy[i] = 0.6 + v_orbit * cos(theta); // Thành phần vận tốc vy kèm theo vận tốc tịnh tiến thiên hà
+            sys.vx[i] = 2.0 - v_orbit * sin(theta); // Vận tốc vx kèm theo vận tốc tịnh tiến thiên hà chậm hơn
+            sys.vy[i] = 0.4 + v_orbit * cos(theta); // Vận tốc vy kèm theo vận tốc tịnh tiến thiên hà chậm hơn
             sys.vz[i] = 0.0;                        // Thành phần vận tốc vz ban đầu bằng 0
             sys.mass[i] = (i == 0) ? 22000.0 : 0.1 + ((double)rand() / RAND_MAX) * 0.9; // Hạt 0 là lỗ đen siêu nặng
         } else {                  // Cài đặt các thông số cho hạt thuộc Thiên hà 2 (nằm bên phải)
-            sys.x[i] = 50.0 + r * cos(theta);  // Tọa độ x lệch về tâm +50
+            sys.x[i] = 80.0 + r * cos(theta);  // Tọa độ x lệch về tâm +80
             sys.y[i] = r * sin(theta);         // Tọa độ y xoay tròn quanh tâm
             sys.z[i] = ((double)rand() / RAND_MAX) * 2.0 - 1.0; // Tọa độ z (độ dày đĩa ngẫu nhiên)
             
             double v_orbit = sqrt(G * 22000.0 / r); // Tính vận tốc quỹ đạo Keplerian v = sqrt(G*M/r)
-            sys.vx[i] = -3.2 + v_orbit * sin(theta); // Thành phần vận tốc vx kèm theo vận tốc tịnh tiến ngược chiều
-            sys.vy[i] = -0.6 - v_orbit * cos(theta); // Thành phần vận tốc vy kèm theo vận tốc tịnh tiến ngược chiều
+            sys.vx[i] = -2.0 + v_orbit * sin(theta); // Vận tốc vx kèm theo vận tốc tịnh tiến ngược chiều chậm hơn
+            sys.vy[i] = -0.4 - v_orbit * cos(theta); // Vận tốc vy kèm theo vận tốc tịnh tiến ngược chiều chậm hơn
             sys.vz[i] = 0.0;                         // Thành phần vận tốc vz ban đầu bằng 0
             sys.mass[i] = (i == half_n) ? 22000.0 : 0.1 + ((double)rand() / RAND_MAX) * 0.9; // Hạt half_n là lỗ đen 2
         }
