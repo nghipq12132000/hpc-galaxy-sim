@@ -677,7 +677,7 @@
                     <span>Compute Nodes</span>
                     <span id="lbl-mpi-nodes" class="control-val">2</span>
                 </div>
-                <input type="range" id="slider-mpi-nodes" min="1" max="4" step="1" value="2">
+                <input type="range" id="slider-mpi-nodes" min="1" max="12" step="1" value="2">
             </div>
 
             <div class="control-group">
@@ -696,25 +696,12 @@
                     <option value="galaxy_collision_10k.txt">galaxy_collision_10k.txt (10k)</option>
                     <option value="galaxy_collision_20k.txt">galaxy_collision_20k.txt (20k)</option>
                 </select>
-            </div>
-
-
-
-            <div class="control-group">
+            </div>            <div class="control-group">
                 <div class="control-label" style="margin-top: 3px;">
                     <span>Cluster Network (IP settings)</span>
                 </div>
-                <div style="display: grid; grid-template-columns: 2fr 3fr; gap: 4px; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
-                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Master:</span>
-                    <input type="text" id="ip-master" value="192.168.1.10" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
-                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 1:</span>
-                    <input type="text" id="ip-node1" value="192.168.1.11" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
-                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 2:</span>
-                    <input type="text" id="ip-node2" value="192.168.1.12" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
-                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 3:</span>
-                    <input type="text" id="ip-node3" value="192.168.1.13" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
-                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node 4:</span>
-                    <input type="text" id="ip-node4" value="192.168.1.14" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+                <div id="cluster-ips-container" style="display: grid; grid-template-columns: 2fr 3fr; gap: 4px; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); max-height: 180px; overflow-y: auto;">
+                    <!-- Will be generated dynamically by Javascript -->
                 </div>
             </div>
 
@@ -761,42 +748,8 @@
         <!-- Cluster Resources Monitor -->
         <div class="hud-card" id="cluster-monitor-card">
             <div class="section-title">Cluster Monitor</div>
-            <div class="monitor-grid">
-                <div class="gauge-container">
-                    <span class="gauge-label">Master</span>
-                    <div class="gauge-circle">
-                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-master" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
-                        <span class="gauge-val" id="val-master">0%</span>
-                    </div>
-                </div>
-                <div class="gauge-container">
-                    <span class="gauge-label">Node 1</span>
-                    <div class="gauge-circle">
-                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node1" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
-                        <span class="gauge-val" id="val-node1">0%</span>
-                    </div>
-                </div>
-                <div class="gauge-container">
-                    <span class="gauge-label">Node 2</span>
-                    <div class="gauge-circle">
-                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node2" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
-                        <span class="gauge-val" id="val-node2">0%</span>
-                    </div>
-                </div>
-                <div class="gauge-container">
-                    <span class="gauge-label">Node 3</span>
-                    <div class="gauge-circle">
-                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node3" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
-                        <span class="gauge-val" id="val-node3">0%</span>
-                    </div>
-                </div>
-                <div class="gauge-container">
-                    <span class="gauge-label">Node 4</span>
-                    <div class="gauge-circle">
-                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node4" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
-                        <span class="gauge-val" id="val-node4">0%</span>
-                    </div>
-                </div>
+            <div class="monitor-grid" id="cluster-monitor-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; max-height: 130px; overflow-y: auto; padding-bottom: 4px;">
+                <!-- Will be generated dynamically by Javascript -->
             </div>
             
             <div class="control-label" style="margin-top: 5px;">
@@ -804,6 +757,7 @@
                 <span id="stat-mpi-traffic" class="control-val">0.0 MB/s</span>
             </div>
         </div>
+
 
         <!-- MPI Process Mapping -->
         <div class="hud-card" id="ranks-mapping-card">
@@ -1976,6 +1930,111 @@
             });
         }
 
+        // --- IP Persistence & Dynamic Nodes Logic ---
+        let masterIp = localStorage.getItem('hpc_master_ip') || "192.168.1.10";
+        let nodeIps = [];
+        try {
+            nodeIps = JSON.parse(localStorage.getItem('hpc_node_ips')) || [];
+        } catch(e) {
+            nodeIps = [];
+        }
+        
+        // Đảm bảo có sẵn danh sách IP mặc định cho tối đa 12 nodes
+        const defaultNodeIps = [
+            "192.168.1.11", "192.168.1.12", "192.168.1.13", "192.168.1.14",
+            "192.168.1.15", "192.168.1.16", "192.168.1.17", "192.168.1.18",
+            "192.168.1.19", "192.168.1.20", "192.168.1.21", "192.168.1.22"
+        ];
+        for (let i = 0; i < 12; i++) {
+            if (!nodeIps[i]) {
+                nodeIps[i] = defaultNodeIps[i];
+            }
+        }
+
+        // Render các ô nhập IP động dựa trên số node được cấu hình
+        function renderIpInputs() {
+            const container = document.getElementById('cluster-ips-container');
+            if (!container) return;
+            
+            const nodesCount = parseInt(document.getElementById('slider-mpi-nodes').value);
+            
+            let html = `
+                <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Master:</span>
+                <input type="text" id="ip-master" value="${masterIp}" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+            `;
+            
+            for (let i = 0; i < nodesCount; i++) {
+                html += `
+                    <span style="font-size: 0.6rem; color: var(--text-secondary); align-self: center;">Node ${i+1}:</span>
+                    <input type="text" id="ip-node${i+1}" value="${nodeIps[i]}" style="background: rgba(17,24,39,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 4px; color: var(--text-primary); font-size: 0.6rem; font-family: monospace;">
+                `;
+            }
+            
+            container.innerHTML = html;
+            
+            // Gắn listeners lưu IP khi thay đổi
+            document.getElementById('ip-master').addEventListener('input', (e) => {
+                masterIp = e.target.value.trim();
+                localStorage.setItem('hpc_master_ip', masterIp);
+                updateRanksMap(
+                    parseInt(document.getElementById('slider-mpi-procs').value),
+                    nodesCount
+                );
+            });
+            
+            for (let i = 0; i < nodesCount; i++) {
+                const el = document.getElementById(`ip-node${i+1}`);
+                if (el) {
+                    el.addEventListener('input', (e) => {
+                        nodeIps[i] = e.target.value.trim();
+                        localStorage.setItem('hpc_node_ips', JSON.stringify(nodeIps));
+                        updateRanksMap(
+                            parseInt(document.getElementById('slider-mpi-procs').value),
+                            nodesCount
+                        );
+                    });
+                }
+            }
+            
+            renderMonitorGauges();
+            updateRanksMap(
+                parseInt(document.getElementById('slider-mpi-procs').value),
+                nodesCount
+            );
+        }
+
+        // Render các vòng đo tải động ở Cluster Monitor
+        function renderMonitorGauges() {
+            const grid = document.getElementById('cluster-monitor-grid');
+            if (!grid) return;
+            
+            const nodesCount = parseInt(document.getElementById('slider-mpi-nodes').value);
+            
+            let html = `
+                <div class="gauge-container">
+                    <span class="gauge-label">Master</span>
+                    <div class="gauge-circle">
+                        <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-master" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
+                        <span class="gauge-val" id="val-master">0%</span>
+                    </div>
+                </div>
+            `;
+            
+            for (let i = 0; i < nodesCount; i++) {
+                html += `
+                    <div class="gauge-container">
+                        <span class="gauge-label">Node ${i+1}</span>
+                        <div class="gauge-circle">
+                            <svg><circle class="bg-ring" cx="19" cy="19" r="16"/><circle class="fill-ring" id="ring-node${i+1}" stroke-dasharray="100.5" stroke-dashoffset="100.5" cx="19" cy="19" r="16"/></svg>
+                            <span class="gauge-val" id="val-node${i+1}">0%</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            grid.innerHTML = html;
+        }
+
         // --- MPI Ranks Mapping visualizer ---
         function updateRanksMap(procs, nodes) {
             const container = document.getElementById('ranks-map-list');
@@ -1984,10 +2043,10 @@
             
             // Master row (does not run computing processes, only coordinates)
             let masterBadgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Coordinator Only</span>';
-            const masterIp = document.getElementById('ip-master').value;
+            const mIp = document.getElementById('ip-master') ? document.getElementById('ip-master').value : masterIp;
             
             // Distribute all ranks 0 to procs-1 across active computing nodes (Node 1 to Node nodes)
-            let nodeRanks = Array.from({ length: 4 }, () => []);
+            let nodeRanks = Array.from({ length: nodes }, () => []);
             for (let r = 0; r < procs; r++) {
                 let nodeIdx = r % nodes;
                 nodeRanks[nodeIdx].push(r);
@@ -1997,32 +2056,27 @@
             container.innerHTML += `
                 <div class="ranks-node-row">
                     <span class="ranks-node-name"><i class="fa-solid fa-server" style="color:var(--orange-accent);"></i> Master</span>
-                    <span style="font-size: 0.55rem; color:var(--text-secondary); font-family: monospace;">${masterIp}</span>
+                    <span style="font-size: 0.55rem; color:var(--text-secondary); font-family: monospace;">${mIp}</span>
                     <div class="ranks-node-badges">${masterBadgesHtml}</div>
                 </div>
             `;
             
             // Append Node rows
-            for (let n = 0; n < 4; n++) {
-                const isSelected = n < nodes;
-                const ipVal = document.getElementById(`ip-node${n+1}`).value;
+            for (let n = 0; n < nodes; n++) {
+                const ipVal = document.getElementById(`ip-node${n+1}`) ? document.getElementById(`ip-node${n+1}`).value : (nodeIps[n] || "");
                 let badgesHtml = '';
                 
-                if (isSelected) {
-                    nodeRanks[n].forEach(r => {
-                        const isMasterRank = r === 0;
-                        badgesHtml += `<span class="rank-badge ${isMasterRank ? 'master-rank' : ''}">R${r}</span>`;
-                    });
-                    if (badgesHtml === '') {
-                        badgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Idle</span>';
-                    }
-                } else {
-                    badgesHtml = '<span style="font-size:0.55rem; color:rgba(255,255,255,0.15);">Offline</span>';
+                nodeRanks[n].forEach(r => {
+                    const isMasterRank = r === 0;
+                    badgesHtml += `<span class="rank-badge ${isMasterRank ? 'master-rank' : ''}">R${r}</span>`;
+                });
+                if (badgesHtml === '') {
+                    badgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Idle</span>';
                 }
                 
                 container.innerHTML += `
-                    <div class="ranks-node-row" style="${isSelected ? '' : 'opacity: 0.35;'}">
-                        <span class="ranks-node-name" style="${isSelected ? 'color: var(--cyan-accent);' : ''}"><i class="fa-solid fa-network-wired"></i> Node ${n+1}</span>
+                    <div class="ranks-node-row">
+                        <span class="ranks-node-name" style="color: var(--cyan-accent);"><i class="fa-solid fa-network-wired"></i> Node ${n+1}</span>
                         <span style="font-size: 0.55rem; color:var(--text-secondary); font-family: monospace;">${ipVal}</span>
                         <div class="ranks-node-badges">${badgesHtml}</div>
                     </div>
@@ -2047,12 +2101,14 @@
         document.getElementById('slider-mpi-procs').addEventListener('input', (e) => {
             const procs = parseInt(e.target.value);
             document.getElementById('lbl-mpi-procs').innerText = procs;
+            localStorage.setItem('hpc_procs_count', procs);
             updateRanksMap(procs, parseInt(document.getElementById('slider-mpi-nodes').value));
         });
         document.getElementById('slider-mpi-nodes').addEventListener('input', (e) => {
             const nodes = parseInt(e.target.value);
             document.getElementById('lbl-mpi-nodes').innerText = nodes;
-            updateRanksMap(parseInt(document.getElementById('slider-mpi-procs').value), nodes);
+            localStorage.setItem('hpc_nodes_count', nodes);
+            renderIpInputs(); // Tự động cập nhật các ô nhập IP và Gauges monitor
         });
         document.getElementById('slider-mpi-duration').addEventListener('input', (e) => {
             document.getElementById('lbl-mpi-duration').innerText = parseFloat(e.target.value).toFixed(1) + " Billion Years";
@@ -2061,33 +2117,22 @@
             }
         });
 
-        // Add input listeners for cluster IPs
-        ['ip-master', 'ip-node1', 'ip-node2', 'ip-node3', 'ip-node4'].forEach(id => {
-            document.getElementById(id).addEventListener('input', () => {
-                updateRanksMap(
-                    parseInt(document.getElementById('slider-mpi-procs').value),
-                    parseInt(document.getElementById('slider-mpi-nodes').value)
-                );
-            });
-        });
-
         async function runMpiSimulation() {
             const duration = parseFloat(document.getElementById('slider-mpi-duration').value);
             const stepsCount = Math.round(duration / 0.016);
+            const activeNodes = parseInt(document.getElementById('slider-mpi-nodes').value);
             
             const config = {
                 processes: parseInt(document.getElementById('slider-mpi-procs').value),
-                nodes: parseInt(document.getElementById('slider-mpi-nodes').value),
+                nodes: activeNodes,
                 dataset: document.getElementById('select-mpi-dataset').value,
                 steps: stepsCount,
                 dt: 0.16,
                 master_ip: document.getElementById('ip-master').value,
-                node_ips: [
-                    document.getElementById('ip-node1').value,
-                    document.getElementById('ip-node2').value,
-                    document.getElementById('ip-node3').value,
-                    document.getElementById('ip-node4').value
-                ]
+                node_ips: Array.from({ length: activeNodes }, (_, i) => {
+                    const el = document.getElementById(`ip-node${i+1}`);
+                    return el ? el.value : nodeIps[i];
+                })
             };
 
             // Switch UI to Live C++ MPI mode
@@ -2240,19 +2285,19 @@
                 if (!response.ok) return;
                 const stats = await response.json();
                 
+                const nodesCount = parseInt(document.getElementById('slider-mpi-nodes').value);
                 updateRing("ring-master", "val-master", stats.master);
-                updateRing("ring-node1", "val-node1", stats.node1);
-                updateRing("ring-node2", "val-node2", stats.node2);
-                updateRing("ring-node3", "val-node3", stats.node3);
-                updateRing("ring-node4", "val-node4", stats.node4);
+                for (let i = 0; i < nodesCount; i++) {
+                    updateRing(`ring-node${i+1}`, `val-node${i+1}`, stats[`node${i+1}`] || 0);
+                }
                 
                 document.getElementById('stat-mpi-traffic').innerText = `${stats.networkTraffic.toFixed(1)} MB/s`;
             } catch (err) {
+                const nodesCount = parseInt(document.getElementById('slider-mpi-nodes').value);
                 updateRing("ring-master", "val-master", 0);
-                updateRing("ring-node1", "val-node1", 0);
-                updateRing("ring-node2", "val-node2", 0);
-                updateRing("ring-node3", "val-node3", 0);
-                updateRing("ring-node4", "val-node4", 0);
+                for (let i = 0; i < nodesCount; i++) {
+                    updateRing(`ring-node${i+1}`, `val-node${i+1}`, 0);
+                }
                 document.getElementById('stat-mpi-traffic').innerText = "0.0 MB/s";
             }
         }
@@ -2363,6 +2408,19 @@
             }
         }
 
+        // Load saved slider settings from localStorage
+        const savedNodesCount = localStorage.getItem('hpc_nodes_count');
+        if (savedNodesCount) {
+            document.getElementById('slider-mpi-nodes').value = savedNodesCount;
+            document.getElementById('lbl-mpi-nodes').innerText = savedNodesCount;
+        }
+        
+        const savedProcsCount = localStorage.getItem('hpc_procs_count');
+        if (savedProcsCount) {
+            document.getElementById('slider-mpi-procs').value = savedProcsCount;
+            document.getElementById('lbl-mpi-procs').innerText = savedProcsCount;
+        }
+
         // Start resource monitoring loop immediately
         monitorInterval = setInterval(pollMonitorStats, 800);
 
@@ -2371,10 +2429,7 @@
 
         // Initialize HUD panels
         initPerformanceChart();
-        updateRanksMap(
-            parseInt(document.getElementById('slider-mpi-procs').value),
-            parseInt(document.getElementById('slider-mpi-nodes').value)
-        );
+        renderIpInputs(); // Sinh động các ô IP và Gauges monitor lần đầu, tự động gọi updateRanksMap()
         loadDatasetOptions();
 
 
