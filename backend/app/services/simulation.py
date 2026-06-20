@@ -52,7 +52,17 @@ class SimulationService:
             
         cmd = ["mpirun", "--oversubscribe", "-mca", "plm_rsh_args", "-o StrictHostKeyChecking=no", "-np", str(config.processes)]
         
-        # Add hostfile configuration for cluster simulation
+        # 1. Compile C++ if missing (Linux only, done before hostfile sync)
+        if not os.path.exists(mpi_binary) and os.name != 'nt':
+            try:
+                sim_state.logs.append("[System] MPI executable not found. Attempting automatic C++ compilation...")
+                subprocess.run(["mpicxx", "-O3", os.path.join(SCRIPTS_DIR, "nbody_mpi.cpp"), "-o", mpi_binary], check=True)
+                sim_state.logs.append("[System] C++ Compilation successful.")
+            except Exception as e:
+                sim_state.logs.append(f"[Error] Compilation failed: {e}")
+                print(f"Compilation failed: {e}", file=sys.stderr)
+
+        # 2. Add hostfile configuration and automatically sync files to compute nodes
         if config.nodes >= 1 and config.node_ips:
             hostfile_path = os.path.join(BACKEND_DIR, "hostfile")
             try:
@@ -72,25 +82,34 @@ class SimulationService:
                 with open(hostfile_path, "r") as f:
                     for line in f:
                         sim_state.logs.append(f"  {line.strip()}")
+                
+                # Synchronize binary and dataset to compute nodes via SSH/rsync
+                if os.name != 'nt' and config.nodes >= 1:
+                    sim_state.logs.append("[System] Synchronizing executable and dataset file to compute nodes...")
+                    for idx in range(config.nodes):
+                        if idx < len(config.node_ips):
+                            ip = config.node_ips[idx]
+                            # Create destination directories if they don't exist
+                            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", f"ubuntu@{ip}", f"mkdir -p {SCRIPTS_DIR} {DATA_DIR}"]
+                            subprocess.run(ssh_cmd, check=False)
+                            
+                            # Rsync binary
+                            rsync_bin = ["rsync", "-avz", "-e", "ssh -o StrictHostKeyChecking=no", mpi_binary, f"ubuntu@{ip}:{mpi_binary}"]
+                            subprocess.run(rsync_bin, check=False)
+                            
+                            # Rsync dataset
+                            rsync_data = ["rsync", "-avz", "-e", "ssh -o StrictHostKeyChecking=no", data_path, f"ubuntu@{ip}:{data_path}"]
+                            subprocess.run(rsync_data, check=False)
+                    sim_state.logs.append("[System] All nodes successfully synchronized.")
             except Exception as e:
-                sim_state.logs.append(f"[Error] Failed to write hostfile: {e}")
-                print(f"Error writing hostfile: {e}", file=sys.stderr)
+                sim_state.logs.append(f"[Error] Failed to write hostfile or sync files: {e}")
+                print(f"Error writing hostfile or sync: {e}", file=sys.stderr)
                 
         cmd.extend([mpi_binary, data_path, str(config.steps), str(config.dt)])
         sim_state.cmd_line = " ".join(cmd)
         
         sim_state.logs.append(f"[System] Execution Command: {sim_state.cmd_line}")
         print(f"Executing: {sim_state.cmd_line}", file=sys.stderr)
-        
-        # Compile if missing (Linux only)
-        if not os.path.exists(mpi_binary) and os.name != 'nt':
-            try:
-                sim_state.logs.append("[System] MPI executable not found. Attempting automatic C++ compilation...")
-                subprocess.run(["mpicxx", "-O3", os.path.join(SCRIPTS_DIR, "nbody_mpi.cpp"), "-o", mpi_binary], check=True)
-                sim_state.logs.append("[System] C++ Compilation successful.")
-            except Exception as e:
-                sim_state.logs.append(f"[Error] Compilation failed: {e}")
-                print(f"Compilation failed: {e}", file=sys.stderr)
                 
         # Run subprocess
         try:
