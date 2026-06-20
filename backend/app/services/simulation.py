@@ -50,7 +50,7 @@ class SimulationService:
         if os.name == 'nt':
             mpi_binary += ".exe"
             
-        cmd = ["mpirun", "-np", str(config.processes)]
+        cmd = ["mpirun", "--oversubscribe", "-np", str(config.processes)]
         
         # Add mock hostfile configuration for multi-node simulation
         if config.nodes > 1:
