@@ -50,7 +50,7 @@ class SimulationService:
         if os.name == 'nt':
             mpi_binary += ".exe"
             
-        cmd = ["mpirun", "--oversubscribe", "-np", str(config.processes)]
+        cmd = ["mpirun", "--oversubscribe", "-mca", "plm_rsh_args", "-o StrictHostKeyChecking=no", "-np", str(config.processes)]
         
         # Add hostfile configuration for cluster simulation
         if config.nodes >= 1 and config.node_ips:
