@@ -52,8 +52,8 @@ class SimulationService:
             
         cmd = ["mpirun", "--oversubscribe", "-np", str(config.processes)]
         
-        # Add mock hostfile configuration for multi-node simulation
-        if config.nodes > 1:
+        # Add hostfile configuration for cluster simulation
+        if config.nodes >= 1 and config.node_ips:
             hostfile_path = os.path.join(BACKEND_DIR, "hostfile")
             try:
                 # Write custom hostfile listing active node IPs and their MPI slots, excluding Master
