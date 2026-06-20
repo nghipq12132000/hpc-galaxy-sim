@@ -547,6 +547,36 @@
             font-family: 'Orbitron', sans-serif;
             font-weight: 700;
         }
+        #btn-mpi-stop-stats {
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #f87171;
+            padding: 6px 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #btn-mpi-stop-stats:hover:not(:disabled) {
+            background: rgba(239, 68, 68, 0.25) !important;
+            border-color: rgba(239, 68, 68, 0.7) !important;
+            color: #fff !important;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+            transform: translateY(-1px);
+        }
+        #btn-mpi-stop-stats:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            background: rgba(255, 255, 255, 0.03) !important;
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            color: var(--text-secondary) !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }
     </style>
 </head>
 <body>
@@ -737,11 +767,16 @@
                 </div>
             </div>
             
-            <div class="control-group" style="margin-top: 5px;">
-                <div class="control-label">
-                    <span>Simulation Status</span>
+            <div class="control-group" style="margin-top: 5px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 10px;">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div class="control-label">
+                        <span>Simulation Status</span>
+                    </div>
+                    <span id="lbl-status" style="font-size: 0.75rem; font-weight: 500; color: #34d399;"><i class="fa-solid fa-circle-dot"></i> Idle</span>
                 </div>
-                <span id="lbl-status" style="font-size: 0.75rem; font-weight: 500; color: #34d399;"><i class="fa-solid fa-circle-dot"></i> Idle</span>
+                <button id="btn-mpi-stop-stats" onclick="stopMpiSimulation()" disabled>
+                    <i class="fa-solid fa-circle-stop"></i> Stop Sim
+                </button>
             </div>
         </div>
 
@@ -2185,6 +2220,7 @@
                 isMpiRunning = true;
                 document.getElementById('btn-mpi-run').disabled = true;
                 document.getElementById('btn-mpi-stop').disabled = false;
+                if (document.getElementById('btn-mpi-stop-stats')) document.getElementById('btn-mpi-stop-stats').disabled = false;
                 document.getElementById('mode-badge').innerText = "LIVE MPI RUN";
                 document.getElementById('mode-badge').style.background = "var(--orange-accent)";
                 document.getElementById('mode-badge').style.boxShadow = "0 0 10px var(--orange-glow)";
@@ -2238,6 +2274,7 @@
                     isMpiRunning = false;
                     document.getElementById('btn-mpi-run').disabled = false;
                     document.getElementById('btn-mpi-stop').disabled = true;
+                    if (document.getElementById('btn-mpi-stop-stats')) document.getElementById('btn-mpi-stop-stats').disabled = true;
                     
                     if (status.errorMessage) {
                         document.getElementById('lbl-status').innerHTML = `<i class="fa-solid fa-circle-xmark" style="color: #ef4444;"></i> Run Error`;
