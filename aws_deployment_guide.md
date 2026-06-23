@@ -1,25 +1,25 @@
 # Hướng dẫn chi tiết thiết lập cụm mô phỏng MPI (FastAPI + C++ MPI) trên AWS EC2
-*(Mẫu cấu hình: Master 2 vCPU/4GB RAM & 4 Compute Nodes 4 vCPU/8GB RAM)*
+*(Mẫu cấu hình tối ưu giới hạn 8 vCPUs: 1 Master 2 vCPU/8GB RAM & 3 Compute Nodes 2 vCPU/8GB RAM hoặc 16GB RAM)*
 
-Tài liệu này hướng dẫn chi tiết cách tạo các máy ảo AWS EC2 từ giao diện AWS Console, cấu hình mạng, thiết lập SSH không mật khẩu (Passwordless SSH), cài đặt môi trường, biên dịch/chạy mô phỏng song song N-Body trên cụm Cluster và bảng ước tính chi phí.
+Tài liệu này hướng dẫn chi tiết cách tạo các máy ảo AWS EC2 từ giao diện AWS Console, cấu hình mạng, thiết lập SSH không mật khẩu (Passwordless SSH), cài đặt môi trường, biên dịch/chạy mô phỏng song song N-Body trên cụm Cluster với kỹ thuật quá giới hạn vCPU (Oversubscription) và bảng ước tính chi phí.
 
 ---
 
-## 📌 Thiết lập cấu hình cụm máy ảo đề xuất:
-* **1 Master Node (Điều phối & API)**:
-  * **Instance Type**: `t3.medium` (2 vCPUs, 4 GiB RAM).
-  * **Chức năng**: Điều phối hệ thống, chạy FastAPI Backend, không trực tiếp tham gia mô phỏng nặng.
-* **4 Compute Nodes (Tính toán MPI)**:
-  * **Instance Type**: `c5.xlarge` (4 vCPUs, 8 GiB RAM - Dòng tối ưu tính toán) hoặc `t3.xlarge` (4 vCPUs, 16 GiB RAM).
-  * **Chức năng**: Chạy song song các tiến trình MPI. Mỗi máy ảo có 4 vCPUs nên sẽ chạy tối ưu **4 processes** (Tổng số tiến trình trong cụm $p = 16$ processes).
+## 📌 Thiết lập cấu hình cụm máy ảo đề xuất (Vừa khít giới hạn 8 vCPUs):
+* **1 Master Node (Điều phối, API & Tính toán)**:
+  * **Instance Type**: `t3.large` (2 vCPUs, 8 GiB RAM).
+  * **Chức năng**: Điều phối hệ thống, chạy FastAPI Backend, đồng thời trực tiếp tham gia mô phỏng tính toán. Việc nâng cấp từ `t3.medium` (4GB RAM) lên `t3.large` (8GB RAM) giúp máy Master có đủ dung lượng bộ nhớ để chạy song song các tiến trình mô phỏng hạt quy mô lớn.
+* **3 Compute Nodes (Tính toán MPI)**:
+  * **Instance Type**: `t3.large` (2 vCPUs, 8 GiB RAM - Tiết kiệm chi phí) hoặc **`r5.large`** (2 vCPUs, 16 GiB RAM - Dòng tối ưu bộ nhớ Memory Optimized, khuyên dùng khi chạy số lượng hạt rất lớn).
+  * **Chức năng**: Chạy song song các tiến trình MPI. Vì giới hạn vCPU của tài khoản chỉ cho phép tối đa 8 vCPUs nên chúng ta chọn loại máy 2 vCPUs. Mỗi máy ảo sẽ chạy vượt mức **4 processes** (Tổng số tiến trình trong cụm là 16 processes).
 
 ---
 
 ## PHẦN 1: Tạo các máy ảo EC2 trên AWS Console (Click-by-click)
 
-Vì máy Master và các Compute Node sử dụng hai cấu hình khác nhau, chúng ta sẽ thực hiện khởi tạo qua 2 đợt riêng biệt.
+Vì máy Master và các Compute Node sử dụng hai cấu hình khác nhau (hoặc cùng cấu hình nhưng tạo riêng biệt để dễ quản lý), chúng ta sẽ thực hiện khởi tạo qua 2 đợt riêng biệt.
 
-### Bước 1.1: Tạo máy ảo Master (`hpc-master` - 2 vCPU, 4GB RAM)
+### Bước 1.1: Tạo máy ảo Master (`hpc-master` - 2 vCPU, 8GB RAM)
 1. Đăng nhập vào tài khoản [AWS Management Console](https://aws.amazon.com/console/).
 2. Trên thanh tìm kiếm ở đỉnh màn hình, gõ `EC2` và click vào dịch vụ **EC2**.
 3. Ở góc phải phía trên màn hình, chọn Region **Singapore** hoặc **Tokyo**.
@@ -30,7 +30,7 @@ Vì máy Master và các Compute Node sử dụng hai cấu hình khác nhau, ch
    * Click chọn logo của **Ubuntu**.
    * Dropdown AMI: Chọn **Ubuntu Server 22.04 LTS (HVM), SSD Volume Type** (64-bit x86).
 7. Tại mục **Instance type**:
-   * Tìm kiếm và chọn **`t3.medium`** (2 vCPUs, 4 GiB RAM).
+   * Tìm kiếm và chọn **`t3.large`** (2 vCPUs, 8 GiB RAM).
 8. Tại mục **Key pair (login)**:
    * Click chọn **Create new key pair** nếu bạn chưa có.
    * **Key pair name**: Gõ `hpc-key`.
@@ -49,58 +49,59 @@ Vì máy Master và các Compute Node sử dụng hai cấu hình khác nhau, ch
 
 ---
 
-### Bước 1.2: Tạo 4 Compute Nodes (`hpc-node1` đến `hpc-node4` - 4 vCPU)
-Ngay sau khi máy Master được tạo xong, tiếp tục tạo đợt 2 cho các Compute Node tính toán:
+### Bước 1.2: Tạo 3 Compute Nodes (`hpc-node1` đến `hpc-node3` - 2 vCPU, 8GB hoặc 16GB RAM)
 1. Nhấn nút **Launch instance** một lần nữa từ màn hình quản lý.
 2. Tại mục **Name and tags**:
    * Nhập tên chung: **`hpc-node`**.
 3. Tại mục **Application and OS Images (AMI)**:
    * Chọn **Ubuntu** và chọn bản **Ubuntu Server 22.04 LTS (HVM)** như đợt 1.
 4. Tại mục **Instance type**:
-   * Tìm kiếm và chọn dòng máy **`c5.xlarge`** (4 vCPUs, 8 GiB RAM - Tối ưu nhất cho các phép tính số học mô phỏng) hoặc chọn **`t3.xlarge`** (4 vCPUs, 16 GiB RAM).
+   * Chọn **`t3.large`** (2 vCPUs, 8 GiB RAM) hoặc chọn **`r5.large`** (2 vCPUs, 16 GiB RAM - Tăng tối đa RAM để chạy khối lượng hạt siêu lớn khi vCPU bị giới hạn).
 5. Tại mục **Key pair (login)**:
-   * Click chọn key pair **`hpc-key`** đã tạo ở Bước 1.1 (Không cần tạo mới key pair).
+   * Click chọn key pair **`hpc-key`** đã tạo ở Bước 1.1 (Không cần tạo mới).
 6. Tại mục **Network settings**:
    * Click nút **Edit**.
    * **Firewall (security groups)**: Click chọn **Select existing security group** (Chọn SG có sẵn).
-   * Tại danh sách bên dưới, click chọn Group **`hpc-security-group`** mà chúng ta đã tạo cho máy Master ở bước trước. *(Điều này đảm bảo các Compute Node dùng chung luật bảo mật và dễ dàng giao tiếp mạng nội bộ với Master).*
+   * Tại danh sách bên dưới, click chọn Group **`hpc-security-group`** đã tạo ở Bước 1.1.
 7. Tại mục **Configure storage**:
    * Đổi dung lượng ổ cứng thành **`15 GiB`** SSD.
 8. Tại cột **Summary** bên phải:
-   * Nhập số lượng máy ảo tại ô **Number of instances**: Nhập **`4`**.
+   * Nhập số lượng máy ảo tại ô **Number of instances**: Nhập **`3`**.
    * Nhấn nút màu cam **Launch instance**.
-9. Quay lại danh sách quản lý máy ảo (**View all instances**), bạn sẽ thấy có 4 máy ảo mới được tạo. Hãy click vào hình bút chì tại cột *Name* của từng máy ảo mới này để đổi tên cụ thể từ `hpc-node` thành:
+9. Quay lại danh sách quản lý máy ảo (**View all instances**), đổi tên cụ thể từ `hpc-node` thành:
    * `hpc-node1`
    * `hpc-node2`
    * `hpc-node3`
-   * `hpc-node4`
 
 ---
 
 ## PHẦN 2: Cấu hình Security Group mở cổng giao tiếp cụm (Click-by-click)
 
-Chúng ta cần mở cổng **8000** để Web Dashboard gọi API và **mở toàn bộ traffic nội bộ** giữa các node để MPI giao tiếp dữ liệu.
+Chúng ta cần mở cổng **8000** để Web Dashboard gọi API, cổng **80** phục vụ trang web và **mở toàn bộ traffic nội bộ** giữa các node để MPI giao tiếp dữ liệu.
 
 1. Tại danh sách máy ảo EC2, click chọn máy ảo `hpc-master`.
 2. Ở nửa dưới màn hình, click vào tab **Security**.
 3. Click chọn ID của Security Group dưới dòng **Security groups** (tên `hpc-security-group`).
 4. Nhấn nút **Edit inbound rules** ở góc phải dưới của bảng Inbound Rules.
 5. Nhấn nút **Add rule** để thêm quy tắc mới (Rule 2):
+   * **Type**: Chọn **HTTP**.
+   * **Port**: Mặc định cổng **`80`**.
+   * **Source**: Chọn **Anywhere-IPv4** (`0.0.0.0/0`).
+6. Nhấn nút **Add rule** tiếp để thêm quy tắc thứ ba (Rule 3):
    * **Type**: Chọn **Custom TCP**.
    * **Port range**: Nhập **`8000`**.
    * **Source**: Chọn **Anywhere-IPv4** (`0.0.0.0/0`).
-6. Nhấn nút **Add rule** tiếp để thêm quy tắc thứ ba (Rule 3 - Quy tắc quan trọng nhất cho MPI):
+7. Nhấn nút **Add rule** tiếp để thêm quy tắc thứ tư (Rule 4 - Giao tiếp nội bộ MPI):
    * **Type**: Chọn **All traffic** (Tất cả lưu lượng).
    * **Source**: Chọn **Custom**.
-   * Ở ô nhập bên cạnh, gõ **`sg-`** hệ thống sẽ tự động hiển thị gợi ý ID của chính Security Group hiện tại. Click chọn nó (Ví dụ: `sg-0123456789abcdef`).
-   * *Ý nghĩa*: Luật này cho phép tất cả các máy ảo sử dụng chung Security Group này truyền nhận dữ liệu qua mọi cổng mạng với nhau (giao thức MPI).
-7. Nhấn nút **Save rules** ở góc phải dưới cùng.
+   * Ở ô nhập bên cạnh, gõ **`sg-`** và click chọn ID của chính Security Group hiện tại (Ví dụ: `sg-0123456789abcdef`).
+8. Nhấn nút **Save rules** ở góc phải dưới cùng.
 
 ---
 
 ## PHẦN 3: Thiết lập mạng & SSH nội bộ
 
-Ghi lại **Public IP** của máy `hpc-master` và **Private IP** nội bộ của cả 5 máy.
+Ghi lại **Public IP** của máy `hpc-master` và **Private IP** nội bộ của cả 4 máy.
 
 ### Bước 3.1: Đổi quyền tệp khóa Private Key trên máy tính cá nhân
 Mở terminal trên máy tính của bạn (PowerShell trên Windows hoặc Terminal trên macOS/Linux) và di chuyển vào thư mục chứa tệp `hpc-key.pem` đã tải về:
@@ -129,11 +130,10 @@ Di chuyển con trỏ xuống cuối tệp và dán thông tin Private IP của 
 172.31.20.11  node1
 172.31.20.12  node2
 172.31.20.13  node3
-172.31.20.14  node4
 ```
 *Nhấn `Ctrl + O`, tiếp tục nhấn `Enter` để lưu, sau đó nhấn `Ctrl + X` để thoát.*
 
-*(Thực hiện tương tự bước chỉnh sửa tệp `/etc/hosts` này trên cả 4 máy compute node bằng cách SSH vào từng máy).*
+*(Thực hiện tương tự bước chỉnh sửa tệp `/etc/hosts` này trên cả 3 máy compute node bằng cách SSH vào từng máy).*
 
 ### Bước 3.3: Tạo khóa SSH nội bộ trên máy `master` và sao chép sang các node
 1. Trên máy Master, chạy lệnh sinh cặp khóa RSA nội bộ (Không đặt mật khẩu khi được hỏi):
@@ -149,7 +149,6 @@ Di chuyển con trỏ xuống cuối tệp và dán thông tin Private IP của 
    nano ~/.ssh/hpc-key.pem
    ```
    *Mở tệp `hpc-key.pem` trên máy cá nhân của bạn, copy toàn bộ nội dung dán vào nano trên Master. Nhấn `Ctrl + O`, `Enter` để lưu, `Ctrl + X` để thoát.*
-   
 4. Đặt quyền truy cập cho tệp khóa tạm thời trên Master:
    ```bash
    chmod 400 ~/.ssh/hpc-key.pem
@@ -159,7 +158,6 @@ Di chuyển con trỏ xuống cuối tệp và dán thông tin Private IP của 
    ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node1
    ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node2
    ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node3
-   ssh-copy-id -i ~/.ssh/id_rsa.pub -o "IdentityFile ~/.ssh/hpc-key.pem" ubuntu@node4
    ```
    *(Nhập `yes` nếu được hỏi xác thực kết nối lần đầu).*
 6. Xóa tệp khóa tạm thời để bảo vệ bảo mật của cụm:
@@ -171,7 +169,7 @@ Di chuyển con trỏ xuống cuối tệp và dán thông tin Private IP của 
 
 ## PHẦN 4: Cài đặt phần mềm & Biên dịch mã nguồn
 
-Bạn cần chạy lệnh cài đặt môi trường trên **CẢ 5 MÁYẢO**:
+Bạn cần chạy lệnh cài đặt môi trường trên **CẢ 4 MÁYẢO**:
 
 ```bash
 # Cập nhật danh sách gói phần mềm
@@ -195,7 +193,6 @@ sudo apt-get install -y python3-pip python3-venv python3-dev
    rsync -avz /home/ubuntu/hpc-galaxy-sim/ ubuntu@node1:/home/ubuntu/hpc-galaxy-sim/
    rsync -avz /home/ubuntu/hpc-galaxy-sim/ ubuntu@node2:/home/ubuntu/hpc-galaxy-sim/
    rsync -avz /home/ubuntu/hpc-galaxy-sim/ ubuntu@node3:/home/ubuntu/hpc-galaxy-sim/
-   rsync -avz /home/ubuntu/hpc-galaxy-sim/ ubuntu@node4:/home/ubuntu/hpc-galaxy-sim/
    ```
 
 ### Bước 4.2: Biên dịch mã nguồn MPI
@@ -206,7 +203,7 @@ sudo apt-get install -y python3-pip python3-venv python3-dev
    ```
 2. Đồng bộ tệp nhị phân vừa biên dịch sang các Node:
    ```bash
-   for node in node1 node2 node3 node4; do
+   for node in node1 node2 node3; do
        rsync -avz /home/ubuntu/hpc-galaxy-sim/scripts/nbody_mpi ubuntu@$node:/home/ubuntu/hpc-galaxy-sim/scripts/nbody_mpi
    done
    ```
@@ -226,112 +223,84 @@ sudo apt-get install -y python3-pip python3-venv python3-dev
 
 ---
 
-## PHẦN 5: Ước tính chi phí vận hành cụm Cluster trong 1 giờ (AWS Singapore)
+## PHẦN 5: Ước tính chi phí vận hành cụm 8 vCPUs (AWS Singapore)
 
-Cấu hình cụm gồm: **1 máy `master` (`t3.medium` - 2 vCPU)** và **4 máy `node` (`c5.xlarge` - 4 vCPU / 8GB RAM mỗi máy)**.
+Bảng chi phí chi tiết cho **1 giờ** hoạt động cho cả hai phương án RAM:
 
-Bảng chi phí chi tiết cho **1 giờ** hoạt động:
+### Phương án A: Dùng cụm Standard `t3.large` (Master + 3 Nodes đều 8GB RAM)
 
 | Thành phần | Số lượng | Cấu hình máy | Đơn giá / Giờ (USD) | Tổng chi phí / Giờ (USD) | Tổng chi phí / Giờ (VND) |
 | :--- | :---: | :--- | :---: | :---: | :---: |
-| **Master Node (t3.medium)** | 1 | 2 vCPUs, 4 GiB RAM | $0.0416 | **$0.0416** | ~1.040 VND |
-| **Compute Nodes (c5.xlarge)** | 4 | 4 vCPUs, 8 GiB RAM | $0.1700 | **$0.6800** | ~17.000 VND |
-| **Ổ cứng SSD gp3 (15GB/máy)** | 5 | 75 GB tổng dung lượng | $0.0001 | **$0.0050** | ~120 VND |
+| **Master Node (t3.large)** | 1 | 2 vCPUs, 8 GiB RAM | $0.0832 | **$0.0832** | ~2.080 VND |
+| **Compute Nodes (t3.large)** | 3 | 2 vCPUs, 8 GiB RAM | $0.0832 | **$0.2496** | ~6.240 VND |
+| **Ổ cứng SSD gp3 (15GB/máy)**| 4 | 60 GB tổng dung lượng | $0.0001 | **$0.0040** | ~100 VND |
 | **Data Transfer** | - | Nhận dữ liệu (Free) / Xuất log | - | **$0.0020** | ~50 VND |
-| **TỔNG CỘNG** | **5** | **Cụm 18 vCPUs, 36 GiB RAM** | | **$0.7286** | **~18.210 VND** |
+| **TỔNG CỘNG** | **4** | **Cụm 8 vCPUs, 32 GiB RAM** | | **$0.3388** | **~8.470 VND** |
 
-### Cách chọn cấu hình tối ưu hiệu năng trên Dashboard:
-* Khi mở Web Dashboard cá nhân của bạn, hãy nhập IP của Master và các compute nodes.
-* Tại cột trái của dashboard, cấu hình:
-  * **Compute Nodes**: Kéo chọn **`4`** nodes.
-  * **Processes (p)**: Kéo chọn **`16`** processes.
-* Sơ đồ **MPI Ranks Mapping** sẽ tự động tính toán phân bố đều: mỗi máy ảo Compute Node chạy đúng **4 MPI processes** tương ứng với 4 vCPUs của dòng máy ảo `c5.xlarge` đã tạo, giúp tận dụng tối đa 100% công suất tính toán của cụm AWS Cluster!
+### Phương án B: Dùng cụm High-RAM (Master `t3.large` 8GB RAM + 3 Nodes `r5.large` 16GB RAM)
 
-### 💾 Chi phí duy trì Ổ cứng SSD gp3 khi TẮT máy (Stop Instance) từ 18/6 đến 25/6 (7 ngày):
+| Thành phần | Số lượng | Cấu hình máy | Đơn giá / Giờ (USD) | Tổng chi phí / Giờ (USD) | Tổng chi phí / Giờ (VND) |
+| :--- | :---: | :--- | :---: | :---: | :---: |
+| **Master Node (t3.large)** | 1 | 2 vCPUs, 8 GiB RAM | $0.0832 | **$0.0832** | ~2.080 VND |
+| **Compute Nodes (r5.large)** | 3 | 2 vCPUs, 16 GiB RAM | $0.1260 | **$0.3780** | ~9.450 VND |
+| **Ổ cứng SSD gp3 (15GB/máy)**| 4 | 60 GB tổng dung lượng | $0.0001 | **$0.0040** | ~100 VND |
+| **Data Transfer** | - | Nhận dữ liệu (Free) / Xuất log | - | **$0.0020** | ~50 VND |
+| **TỔNG CỘNG** | **4** | **Cụm 8 vCPUs, 56 GiB RAM** | | **$0.4672** | **~11.680 VND** |
 
-Khi bạn **Tắt máy ảo (Stop)** để tạm nghỉ, CPU và RAM của máy ảo sẽ được giải phóng hoàn toàn và không tính phí. Tuy nhiên, ổ cứng lưu trữ SSD (EBS gp3 Volume) vẫn được AWS giữ lại để bảo vệ hệ điều hành, môi trường OpenMPI và code của bạn. Phần dung lượng này **vẫn sẽ bị tính phí**.
-
-Giá lưu trữ ổ đĩa gp3 SSD tại Singapore là **$0.08 / GB / tháng** (30 ngày). 
-Dưới đây là chi phí dự tính cho 1 tuần (18/6 - 25/6) duy trì cụm khi tắt máy:
-
-* **Đối với Cụm 5 máy ảo (1 Master + 4 Compute Nodes - Tổng 75 GB SSD)**:
-  * Chi phí 1 tháng: $75\text{ GB} \times 0.08 = \$6.00\text{ USD}$ (~150.000 VND).
-  * Chi phí 1 ngày: $\$6.00 / 30 \text{ ngày} = \$0.20\text{ USD}$ (~5.000 VND).
-  * **Chi phí duy trì 1 tuần (18/6 - 25/6)**: $\$0.20 \times 7\text{ ngày} = \mathbf{\$1.40\text{ USD}}$ (khoảng **~35.000 VND**).
-
-* **Đối với Cụm 4 máy ảo (1 Master + 3 Compute Nodes - Tổng 60 GB SSD)**:
-  * Chi phí 1 tháng: $60\text{ GB} \times 0.08 = \$4.80\text{ USD}$ (~120.000 VND).
-  * Chi phí 1 ngày: $\$4.80 / 30 \text{ ngày} = \$0.16\text{ USD}$ (~4.000 VND).
-  * **Chi phí duy trì 1 tuần (18/6 - 25/6)**: $\$0.16 \times 7\text{ ngày} = \mathbf{\$1.12\text{ USD}}$ (khoảng **~28.000 VND**).
-
-*Mẹo tiết kiệm*: Nếu bạn muốn ngắt hoàn toàn mọi chi phí phát sinh khi dừng nghiên cứu lâu ngày, bạn có thể tạo một bản sao lưu ảnh đĩa (Create AMI) của các máy ảo rồi Terminate (Xóa hẳn) máy ảo đó đi. Khi cần làm việc lại, bạn chỉ cần khởi chạy cụm máy mới từ AMI đã sao lưu mà không phải cài đặt lại từ đầu!
+### 💾 Chi phí duy trì Ổ cứng SSD gp3 khi TẮT máy (Stop Instance) trong 7 ngày:
+* **Tổng dung lượng**: 60 GB SSD cho cụm 4 máy.
+* Giá lưu trữ ổ đĩa gp3 SSD tại Singapore là **$0.08 / GB / tháng**.
+* **Chi phí duy trì 1 tuần (7 ngày)**: $60\text{ GB} \times 0.08 \times (7 / 30) \approx \mathbf{\$1.12\text{ USD}}$ (khoảng **~28.000 VND**).
 
 ---
 
-## 🛠 Xử lý lỗi: "vCPU capacity limit exceeded (Limit: 8 vCPUs)"
-Nếu bạn sử dụng tài khoản AWS mới hoặc tài khoản Free Tier, AWS mặc định chỉ cấp hạn mức sử dụng tối đa **8 vCPUs** cho toàn bộ các máy ảo của bạn. 
-* Máy Master (`t3.medium`) đã sử dụng **2 vCPUs**.
-* Nếu bạn khởi tạo 4 Compute Nodes loại `c5.xlarge` (mỗi node 4 vCPUs $\times$ 4 = 16 vCPUs), tổng số vCPU yêu cầu là 18 vCPUs, vượt quá giới hạn 8 vCPUs nên AWS báo lỗi `Instance launch failed`.
+## PHẦN 6: Cách chọn cấu hình tối ưu hiệu năng trên Dashboard
 
-### 💡 Giải pháp 1: Giảm số Node xuống 3 máy và hạ cấu hình (Khuyên dùng - Không cần nâng hạn mức)
-Bạn có thể cấu hình cụm Cluster của mình vừa khít với **8 vCPUs** giới hạn bằng cách:
-1. **Master Node**: Vẫn giữ nguyên **`t3.medium`** (2 vCPUs, 4 GiB RAM).
-2. **Compute Nodes**: Giảm xuống **3 Compute Nodes** (node1, node2, node3) và sử dụng loại máy ảo **`t3.medium`** hoặc **`c5.large`** (đều có **2 vCPUs**, 4 GiB RAM).
-   * **Tổng số vCPUs**: $2 \text{ (Master)} + 3 \text{ Nodes} \times 2 = \mathbf{8 \text{ vCPUs}}$ (Đạt ngưỡng tối đa cho phép).
-   * **Cấu hình trên Dashboard**: Chọn **`3` Compute Nodes** và **`6` Processes** (Mỗi Node chạy 2 processes tương ứng 2 vCPU).
+Vì máy Master bây giờ cũng trực tiếp tham gia tính toán mô phỏng và chạy song song các tiến trình MPI, bạn hãy cấu hình trên Dashboard như sau để chia đều 16 processes lên 4 máy ảo:
 
-Bảng chi phí 1 giờ cho giải pháp này:
+1. **Thiết lập thanh trượt trên Dashboard**:
+   * **Compute Nodes**: Kéo chọn **`4`** nodes.
+   * **Processes (p)**: Kéo chọn **`16`** processes.
+2. **Cấu hình địa chỉ IP (Cluster Network)**:
+   * **Master**: Điền Private IP của máy Master.
+   * **Node 1**: Điền **Private IP của máy Master** (để Master hoạt động như một node tính toán thực thụ).
+   * **Node 2**: Điền Private IP của máy `node1`.
+   * **Node 3**: Điền Private IP của máy `node2`.
+   * **Node 4**: Điền Private IP của máy `node3`.
+3. Sơ đồ **MPI Ranks Mapping** lúc này sẽ tự động phân phối:
+   * **Master (Node 1)**: Chạy 4 MPI processes (`Rank 0` tới `Rank 3`).
+   * **Compute Node 1 (Node 2)**: Chạy 4 MPI processes (`Rank 4` tới `Rank 7`).
+   * **Compute Node 2 (Node 3)**: Chạy 4 MPI processes (`Rank 8` tới `Rank 11`).
+   * **Compute Node 3 (Node 4)**: Chạy 4 MPI processes (`Rank 12` tới `Rank 15`).
+   * *Tổng cộng*: 16 processes chạy song song trên cụm 8 vCPUs vật lý.
 
-| Máy ảo | Số lượng | Cấu hình | Đơn giá / Giờ | Tổng cộng / Giờ |
-| :--- | :---: | :--- | :---: | :---: |
-| **Master Node (t3.medium)** | 1 | 2 vCPUs, 4 GiB RAM | $0.0416 | **$0.0416** (~1.040đ) |
-| **Compute Nodes (c5.large)** | 3 | 2 vCPUs, 4 GiB RAM | $0.0850 | **$0.2550** (~6.370đ) |
-| **Ổ cứng SSD gp3** | 4 | 60 GB tổng | $0.0001 | **$0.0040** (~100đ) |
-| **TỔNG CỘNG** | **4** | **Cụm 8 vCPUs, 16 GiB RAM** | | **$0.3006** (~7.510đ) |
-
-### 💡 Giải pháp 2: Giữ nguyên 4 Compute Nodes nhưng dùng máy 1 vCPU
-Nếu bạn bắt buộc phải demo cụm 4 Compute Nodes (tổng cộng 5 máy ảo bao gồm cả Master):
-1. **Master Node**: Chọn loại **`t2.small`** (1 vCPU, 2 GiB RAM).
-2. **Compute Nodes**: Chọn 4 máy loại **`t2.micro`** (1 vCPU, 1 GiB RAM).
-   * **Tổng số vCPUs**: $1 \text{ (Master)} + 4 \times 1 \text{ (Nodes)} = \mathbf{5 \text{ vCPUs}}$ (Thoải mái nằm trong hạn mức 8 vCPUs).
-   * **Cấu hình trên Dashboard**: Chọn **`4` Compute Nodes** và **`4` Processes** (Mỗi Node chạy 1 process tương ứng 1 vCPU).
-
-### 💡 Giải pháp 3: Gửi yêu cầu nâng hạn mức vCPU của AWS (Miễn phí)
-1. Click vào liên kết báo lỗi trong AWS Console hoặc truy cập: [http://aws.amazon.com/contact-us/ec2-request](http://aws.amazon.com/contact-us/ec2-request)
-2. Chọn loại yêu cầu nâng hạn mức cho **Standard (A, C, D, H, I, M, R, T, Z) instances**.
-3. Đề xuất nâng lên hạn mức **`32` vCPUs** hoặc **`64` vCPUs**. AWS thường tự động duyệt yêu cầu này của bạn trong vòng **1 đến 2 giờ** hoàn toàn miễn phí. Sau đó bạn có thể tạo cụm cấu hình cao `c5.xlarge` bình thường.
+### 💡 Tại sao cấu hình này hoạt động được? (Kỹ thuật Oversubscription)
+OpenMPI hỗ trợ tính năng chạy vượt mức số lượng nhân vật lý (Oversubscribing). Trong mã nguồn điều phối backend của bạn tại [simulation.py](file:///g:/My%20Drive/Classroom/T%C3%ADnh%20to%C3%A1n%20hi%E1%BB%87u%20n%C4%83ng%20cao/hpc-galaxy-sim/backend/app/services/simulation.py#L53), cờ `--oversubscribe` đã được thêm vào lệnh khởi chạy `mpirun` (`mpirun --oversubscribe ...`). Điều này cho phép mỗi máy ảo 2 vCPUs vẫn có thể chạy mượt mà 4 tiến trình MPI đồng thời mà không bị ngắt kết nối hay báo lỗi giới hạn luồng của CPU.
 
 ---
 
-## PHẦN 6: Cấu hình Web Server Nginx trên máy Master
+## PHẦN 7: Cấu hình Web Server Nginx trên máy Master
 
-Để biến máy Master thành máy chủ lưu trữ Web thực tế, giúp bạn và thầy cô chỉ cần nhập địa chỉ IP của máy Master (ví dụ: `http://<Master_Public_IP>`) là xem được giao diện mô phỏng 3D ngay lập tức (không cần chạy local file `index.html`), chúng ta sẽ cấu hình Nginx làm Web Server và Reverse Proxy:
+Để xem được giao diện mô phỏng 3D từ bất kỳ trình duyệt nào mà không cần chạy local file `index.html`, chúng ta sẽ cấu hình Nginx làm Web Server và Reverse Proxy:
 
-### Bước 6.1: Cài đặt Nginx trên máy Master
-SSH vào máy Master và chạy các lệnh:
+### Bước 7.1: Cài đặt Nginx trên máy Master
 ```bash
 sudo apt-get update
 sudo apt-get install -y nginx
 ```
 
-### Bước 6.2: Copy mã nguồn Front-end vào thư mục Web của Nginx
-Copy tệp giao diện `index.html` và tệp cấu hình `.env` vào thư mục gốc chứa trang web mặc định của Nginx để trình duyệt có thể truy cập được:
+### Bước 7.2: Copy mã nguồn Front-end vào thư mục Web của Nginx
 ```bash
 sudo cp /home/ubuntu/hpc-galaxy-sim/frontend/index.html /var/www/html/index.html
 sudo cp /home/ubuntu/hpc-galaxy-sim/frontend/.env /var/www/html/.env
 ```
 
-### Bước 6.3: Cấu hình Nginx làm Reverse Proxy
-Chúng ta sẽ cấu hình Nginx tự động chuyển tiếp các cổng:
-* Truy cập `http://<IP_Master>` $\rightarrow$ Hiển thị giao diện Web Dashboard (Cổng 80).
-* Truy cập `http://<IP_Master>/api/...` $\rightarrow$ Nginx tự động chuyển hướng nội bộ sang FastAPI Backend đang chạy ở cổng 8000 (`http://127.0.0.1:8000/api/...`).
-* *Ưu điểm*: Bỏ qua lỗi CORS, không cần mở cổng 8000 trên AWS Security Group nữa (chỉ cần mở cổng 80 chuẩn Web).
-
+### Bước 7.3: Cấu hình Nginx làm Reverse Proxy
 Mở tệp cấu hình mặc định của Nginx:
 ```bash
 sudo nano /etc/nginx/sites-available/default
 ```
-Tìm đến khối cấu hình `server { ... }` và thay thế toàn bộ nội dung của tệp bằng cấu hình dưới đây:
+Thay thế toàn bộ nội dung của tệp bằng cấu hình dưới đây:
 ```nginx
 server {
     listen 80 default_server;
@@ -358,23 +327,17 @@ server {
     }
 }
 ```
-*Nhấn `Ctrl + O`, `Enter` để lưu, `Ctrl + X` để thoát.*
 
-### Bước 6.4: Kiểm tra và khởi động lại Nginx
-1. Kiểm tra cú pháp cấu hình xem có bị lỗi chính tả không:
+### Bước 7.4: Kiểm tra và khởi động lại Nginx
+1. Kiểm tra cú pháp:
    ```bash
    sudo nginx -t
    ```
-   *(Nếu thấy hiển thị `syntax is ok` và `test is successful` là cấu hình chuẩn).*
-2. Khởi động lại dịch vụ Nginx để áp dụng cấu hình mới:
+2. Khởi động lại dịch vụ:
    ```bash
    sudo systemctl restart nginx
    ```
 
-### 🎈 Hưởng thành quả:
-* **Mở cổng 80 trên AWS**: Đảm bảo Security Group của máy Master đã được mở cổng **HTTP (cổng 80)** cho Anywhere (`0.0.0.0/0`).
-* **Truy cập**: Giờ đây bạn chỉ cần gõ địa chỉ IP công cộng của Master trên trình duyệt máy tính của bạn:  
-  `http://<IP_Public_Cua_Master>`  
-  Giao diện 3D Three.js sẽ hiện ra ngay lập tức và tự động kết nối hoàn hảo với API ở backend!
-
-
+Giờ đây bạn chỉ cần gõ địa chỉ IP công cộng của Master trên trình duyệt:  
+`http://<IP_Public_Cua_Master>`  
+Giao diện 3D sẽ tự động kết nối hoàn hảo với API backend ở cổng 8000.

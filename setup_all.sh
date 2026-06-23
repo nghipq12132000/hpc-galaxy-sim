@@ -49,13 +49,25 @@ mpicxx -O3 scripts/nbody_mpi.cpp -o scripts/nbody_mpi
 echo -e "${GREEN}✓ Biên dịch MPI thành công tại: scripts/nbody_mpi${NC}"
 
 if [ ! -z "$NODES" ]; then
-    echo -e "${YELLOW}Đang đồng bộ mã nguồn và tệp nhị phân sang các Compute Nodes...${NC}"
+    echo -e "${YELLOW}Đang cài đặt môi trường và gói phần mềm trên các Compute Nodes...${NC}"
+    for node in $NODES; do
+        echo -e " -> Đang cấu hình và cài đặt trên ${node}..."
+        # Khởi chạy cài đặt OpenMPI và các gói cần thiết trên node tính toán từ xa
+        ssh -o StrictHostKeyChecking=no ubuntu@$node "sudo apt-get update && sudo apt-get install -y build-essential openmpi-bin openmpi-common libopenmpi-dev rsync"
+    done
+    echo -e "${GREEN}✓ Cài đặt phần mềm trên tất cả các Compute Nodes thành công.${NC}"
+
+    echo -e "${YELLOW}Đang đồng bộ mã nguồn, tệp nhị phân và dữ liệu sang các Compute Nodes...${NC}"
     for node in $NODES; do
         echo -e " -> Đang đồng bộ tới ${node}..."
-        # Tạo thư mục đích trên node từ xa nếu chưa có
-        ssh -o StrictHostKeyChecking=no ubuntu@$node "mkdir -p $PROJECT_DIR/scripts"
+        # Tạo các thư mục đích trên node từ xa nếu chưa có
+        ssh -o StrictHostKeyChecking=no ubuntu@$node "mkdir -p $PROJECT_DIR/scripts $PROJECT_DIR/data"
         # Đồng bộ file nhị phân vừa biên dịch
         rsync -avz "$PROJECT_DIR/scripts/nbody_mpi" ubuntu@$node:"$PROJECT_DIR/scripts/nbody_mpi"
+        # Đồng bộ toàn bộ thư mục dữ liệu hạt đầu vào
+        if [ -d "$PROJECT_DIR/data" ]; then
+            rsync -avz "$PROJECT_DIR/data/" ubuntu@$node:"$PROJECT_DIR/data/"
+        fi
     done
     echo -e "${GREEN}✓ Đồng bộ sang tất cả các Compute Nodes thành công.${NC}"
 fi
