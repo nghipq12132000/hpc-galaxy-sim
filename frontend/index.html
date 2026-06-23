@@ -2076,18 +2076,26 @@
             if (!container) return;
             container.innerHTML = '';
             
-            // Master row (does not run computing processes, only coordinates)
-            let masterBadgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Coordinator Only</span>';
             const mIp = document.getElementById('ip-master') ? document.getElementById('ip-master').value : masterIp;
             
-            // Distribute all ranks 0 to procs-1 across active computing nodes (Node 1 to Node nodes)
-            let nodeRanks = Array.from({ length: nodes }, () => []);
+            // Total computing hosts: Master + active nodes
+            const totalHosts = 1 + nodes;
+            let hostRanks = Array.from({ length: totalHosts }, () => []);
             for (let r = 0; r < procs; r++) {
-                let nodeIdx = r % nodes;
-                nodeRanks[nodeIdx].push(r);
+                let hostIdx = r % totalHosts;
+                hostRanks[hostIdx].push(r);
             }
             
-            // Append Master row
+            // Render Master row with computing ranks
+            let masterBadgesHtml = '';
+            hostRanks[0].forEach(r => {
+                const isMasterRank = r === 0;
+                masterBadgesHtml += `<span class="rank-badge ${isMasterRank ? 'master-rank' : ''}">R${r}</span>`;
+            });
+            if (masterBadgesHtml === '') {
+                masterBadgesHtml = '<span style="font-size:0.55rem; color:var(--text-secondary); font-style:italic;">Coordinator Only</span>';
+            }
+            
             container.innerHTML += `
                 <div class="ranks-node-row">
                     <span class="ranks-node-name"><i class="fa-solid fa-server" style="color:var(--orange-accent);"></i> Master</span>
@@ -2096,12 +2104,12 @@
                 </div>
             `;
             
-            // Append Node rows
+            // Render Node rows with computing ranks
             for (let n = 0; n < nodes; n++) {
                 const ipVal = document.getElementById(`ip-node${n+1}`) ? document.getElementById(`ip-node${n+1}`).value : (nodeIps[n] || "");
                 let badgesHtml = '';
                 
-                nodeRanks[n].forEach(r => {
+                hostRanks[n + 1].forEach(r => {
                     const isMasterRank = r === 0;
                     badgesHtml += `<span class="rank-badge ${isMasterRank ? 'master-rank' : ''}">R${r}</span>`;
                 });
