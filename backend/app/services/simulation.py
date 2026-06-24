@@ -66,19 +66,16 @@ class SimulationService:
         if config.nodes >= 1 and config.node_ips:
             hostfile_path = os.path.join(BACKEND_DIR, "hostfile")
             try:
-                # Master gets exactly 1 process (R0) to minimize workload, remaining distributed to compute nodes
+                # Write custom hostfile listing active node IPs and their MPI slots, excluding Master
                 with open(hostfile_path, "w") as f:
-                    f.write(f"{config.master_ip} slots=1\n")
-                    
-                    rem_procs = max(0, config.processes - 1)
                     for idx in range(config.nodes):
                         if idx < len(config.node_ips):
                             ip = config.node_ips[idx]
-                            slots = (rem_procs // config.nodes) + (1 if idx < (rem_procs % config.nodes) else 0)
+                            slots = (config.processes // config.nodes) + (1 if idx < (config.processes % config.nodes) else 0)
                             if slots > 0:
                                 f.write(f"{ip} slots={slots}\n")
                 cmd.extend(["--hostfile", hostfile_path])
-                sim_state.logs.append(f"[System] Created MPI hostfile configurations (Master runs 1 coordinator process, Nodes run remainder) at: {hostfile_path}")
+                sim_state.logs.append(f"[System] Created MPI hostfile configurations (excluding Master) at: {hostfile_path}")
                 
                 # Log the generated hostfile content for verification
                 sim_state.logs.append("[System] Hostfile contents:")
