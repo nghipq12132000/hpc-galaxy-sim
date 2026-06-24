@@ -577,9 +577,110 @@
             box-shadow: none !important;
             transform: none !important;
         }
+
+        /* 3D floating labels for Galaxy Centers */
+        .galaxy-label {
+            position: absolute;
+            z-index: 5;
+            pointer-events: none;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            background: rgba(3, 7, 18, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            color: #f3f4f6;
+            transform: translate(-50%, -100%) translateY(-10px);
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+        }
+        .galaxy-label::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px 5px 0;
+            border-style: solid;
+            border-color: rgba(3, 7, 18, 0.85) transparent;
+            display: block;
+            width: 0;
+        }
+        #label-milkyway {
+            border-color: var(--cyan-accent);
+            color: var(--cyan-accent);
+            text-shadow: 0 0 6px var(--cyan-glow);
+        }
+        #label-andromeda {
+            border-color: var(--orange-accent);
+            color: var(--orange-accent);
+            text-shadow: 0 0 6px var(--orange-glow);
+        }
+
+        /* Aurora cosmic background container */
+        #aurora-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+            pointer-events: none;
+            background: radial-gradient(circle at 50% 50%, #030712 0%, #000000 100%);
+        }
+        .aurora-wave {
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            top: -25%;
+            left: -25%;
+            filter: blur(120px);
+            opacity: 0.15;
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+        .aurora-green {
+            background: radial-gradient(circle at 30% 20%, #10b981 0%, transparent 60%);
+            animation: floatGreen 28s ease-in-out infinite alternate;
+        }
+        .aurora-purple {
+            background: radial-gradient(circle at 70% 80%, #8b5cf6 0%, transparent 60%);
+            animation: floatPurple 35s ease-in-out infinite alternate;
+        }
+        .aurora-blue {
+            background: radial-gradient(circle at 80% 30%, #06b6d4 0%, transparent 60%);
+            animation: floatBlue 24s ease-in-out infinite alternate;
+        }
+        @keyframes floatGreen {
+            0% { transform: translate(0px, 0px) rotate(0deg) scale(1); }
+            50% { transform: translate(60px, 40px) rotate(15deg) scale(1.1); }
+            100% { transform: translate(-40px, 80px) rotate(-10deg) scale(0.95); }
+        }
+        @keyframes floatPurple {
+            0% { transform: translate(0px, 0px) rotate(0deg) scale(1.05); }
+            50% { transform: translate(-80px, -30px) rotate(-20deg) scale(0.9); }
+            100% { transform: translate(50px, -60px) rotate(10deg) scale(1.15); }
+        }
+        @keyframes floatBlue {
+            0% { transform: translate(0px, 0px) rotate(0deg) scale(0.9); }
+            50% { transform: translate(-30px, 50px) rotate(10deg) scale(1.1); }
+            100% { transform: translate(70px, -20px) rotate(-15deg) scale(1.0); }
+        }
     </style>
 </head>
 <body>
+    <!-- Aurora background effect -->
+    <div id="aurora-container">
+        <div class="aurora-wave aurora-green"></div>
+        <div class="aurora-wave aurora-purple"></div>
+        <div class="aurora-wave aurora-blue"></div>
+    </div>
+
+    <!-- Floating Labels for Galaxy Centers -->
+    <div id="label-milkyway" class="galaxy-label" style="display: none;">Milky Way</div>
+    <div id="label-andromeda" class="galaxy-label" style="display: none;">Andromeda</div>
 
     <!-- Three.js Canvas Container -->
     <canvas id="webgl-canvas"></canvas>
@@ -770,13 +871,25 @@
             <div class="control-group" style="margin-top: 5px; display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 10px;">
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     <div class="control-label">
-                        <span>Simulation Status</span>
+                        <span><span>Simulation Status</span></span>
                     </div>
                     <span id="lbl-status" style="font-size: 0.75rem; font-weight: 500; color: #34d399;"><i class="fa-solid fa-circle-dot"></i> Idle</span>
                 </div>
                 <button id="btn-mpi-stop-stats" onclick="stopMpiSimulation()" disabled>
                     <i class="fa-solid fa-circle-stop"></i> Stop Sim
                 </button>
+            </div>
+
+            <!-- Galaxy Centers Legend -->
+            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 15px; justify-content: center; font-size: 0.7rem; font-family: 'Orbitron', sans-serif;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--cyan-accent); box-shadow: 0 0 6px var(--cyan-glow);"></span>
+                    <span style="color: var(--cyan-accent); font-weight: 600;">Milky Way</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--orange-accent); box-shadow: 0 0 6px var(--orange-glow);"></span>
+                    <span style="color: var(--orange-accent); font-weight: 600;">Andromeda</span>
+                </div>
             </div>
         </div>
 
@@ -865,6 +978,9 @@
         // Volumetric Nebula Gas Cloud Layers
         let nebulaStarsGeometry, nebulaStarsMaterial, nebulaPoints;
         
+        // Twinkling Background Starfield Globals
+        let bgStarsGeometry, bgStarsMaterial, bgStarsPoints;
+        
         let isBrightArray = []; // Boolean mask of size N, true for bright stars
         
         // --- Simulation State ---
@@ -892,37 +1008,18 @@
         function init() {
             // Scene & Renderer
             scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x020208, 0.0015);
+            scene.fog = new THREE.FogExp2(0x020208, 0.001); // Soft fog
             
-            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl-canvas'), antialias: true });
+            // Enabled alpha: true to support transparent canvas so CSS Aurora background shows through
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl-canvas'), antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0); // Transparent background
 
-            // Create a gorgeous colorful space nebula background texture dynamically
-            const bgCanvas = document.createElement('canvas');
-            bgCanvas.width = 512;
-            bgCanvas.height = 512;
-            const bgCtx = bgCanvas.getContext('2d');
-            
-            // Deep radial background gradient
-            const bgGrad = bgCtx.createRadialGradient(256, 256, 0, 256, 256, 360);
-            bgGrad.addColorStop(0, '#09051c'); // Deep cosmic purple
-            bgGrad.addColorStop(0.4, '#03020c'); // Very dark blue
-            bgGrad.addColorStop(1, '#000002'); // Black edge
-            bgCtx.fillStyle = bgGrad;
-            bgCtx.fillRect(0, 0, 512, 512);
+            scene.background = null; // Disable static texture background
 
-            // Add soft colorful nebula gas clouds in the background
-            bgCtx.fillStyle = 'rgba(76, 29, 149, 0.07)'; // Purple cloud
-            bgCtx.beginPath(); bgCtx.arc(120, 120, 220, 0, Math.PI * 2); bgCtx.fill();
-            bgCtx.fillStyle = 'rgba(6, 182, 212, 0.05)'; // Cyan cloud
-            bgCtx.beginPath(); bgCtx.arc(380, 380, 260, 0, Math.PI * 2); bgCtx.fill();
-            bgCtx.fillStyle = 'rgba(236, 72, 153, 0.04)'; // Pink cloud
-            bgCtx.beginPath(); bgCtx.arc(420, 100, 180, 0, Math.PI * 2); bgCtx.fill();
-
-            const bgTexture = new THREE.Texture(bgCanvas);
-            bgTexture.needsUpdate = true;
-            scene.background = bgTexture;
+            // Initialize 3D Twinkling background starfield
+            initBackgroundStars();
 
             // Camera
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2500);
@@ -1782,8 +1879,111 @@
                 }
             }
 
+            // Soft twinkling effect for background stars
+            if (bgStarsMaterial) {
+                bgStarsMaterial.size = 1.0 + 0.6 * Math.sin(time * 0.003);
+            }
+
+            // Update floating 3D labels for Milky Way and Andromeda
+            updateGalaxyLabels();
+
             controls.update();
             renderer.render(scene, camera);
+        }
+
+        // Initialize 3D Starfield in background with random coordinate distributions
+        function initBackgroundStars() {
+            bgStarsGeometry = new THREE.BufferGeometry();
+            const count = 1500; // 1500 twinkling stars
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            
+            for (let i = 0; i < count; i++) {
+                // Spherical random distribution
+                const u = Math.random();
+                const v = Math.random();
+                const theta = u * 2.0 * Math.PI;
+                const phi = Math.acos(2.0 * v - 1.0);
+                const r = 600 + Math.random() * 400; // Placed far away in outer space
+                
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = r * Math.cos(phi);
+                
+                // Color variation: White, light-cyan, soft lavender stars
+                const type = Math.random();
+                if (type < 0.5) {
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0; // White
+                } else if (type < 0.8) {
+                    colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.95; colors[i * 3 + 2] = 1.0; // Light Blue/Cyan
+                } else {
+                    colors[i * 3] = 0.95; colors[i * 3 + 1] = 0.8; colors[i * 3 + 2] = 1.0; // Soft Purple/Lavender
+                }
+            }
+            
+            bgStarsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            bgStarsGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            bgStarsMaterial = new THREE.PointsMaterial({
+                size: 1.5,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            bgStarsPoints = new THREE.Points(bgStarsGeometry, bgStarsMaterial);
+            scene.add(bgStarsPoints);
+        }
+
+        // Project 3D Galaxy Center positions to 2D HTML absolute coordinates
+        function updateGalaxyLabels() {
+            const labelMilkyWay = document.getElementById('label-milkyway');
+            const labelAndromeda = document.getElementById('label-andromeda');
+            
+            const renderCenters = document.getElementById('chk-render-centers').checked;
+            if (!renderCenters || !frames || frames.length === 0 || !frames[currentFrameIndex]) {
+                labelMilkyWay.style.display = 'none';
+                labelAndromeda.style.display = 'none';
+                return;
+            }
+
+            const frameCoords = frames[currentFrameIndex];
+            const halfN = Math.floor(particleCount / 2);
+
+            // 1. Milky Way Center (Index 0 in coordinates array)
+            const posMW = new THREE.Vector3(frameCoords[0], frameCoords[1], frameCoords[2]);
+            // 2. Andromeda Center (Index halfN in coordinates array)
+            const posAND = new THREE.Vector3(frameCoords[halfN * 3], frameCoords[halfN * 3 + 1], frameCoords[halfN * 3 + 2]);
+
+            const canvas = renderer.domElement;
+            const widthHalf = canvas.clientWidth / 2;
+            const heightHalf = canvas.clientHeight / 2;
+
+            // Milky Way Project
+            posMW.project(camera);
+            if (posMW.z > 1.0) {
+                labelMilkyWay.style.display = 'none';
+            } else {
+                const screenX = (posMW.x * widthHalf) + widthHalf;
+                const screenY = -(posMW.y * heightHalf) + heightHalf;
+                labelMilkyWay.style.display = 'block';
+                labelMilkyWay.style.left = `${screenX}px`;
+                labelMilkyWay.style.top = `${screenY}px`;
+            }
+
+            // Andromeda Project
+            posAND.project(camera);
+            if (posAND.z > 1.0) {
+                labelAndromeda.style.display = 'none';
+            } else {
+                const screenX = (posAND.x * widthHalf) + widthHalf;
+                const screenY = -(posAND.y * heightHalf) + heightHalf;
+                labelAndromeda.style.display = 'block';
+                labelAndromeda.style.left = `${screenX}px`;
+                labelAndromeda.style.top = `${screenY}px`;
+            }
         }
 
         // UI demo configuration parameters display update
