@@ -66,17 +66,19 @@ class SimulationService:
         if config.nodes >= 1 and config.node_ips:
             hostfile_path = os.path.join(BACKEND_DIR, "hostfile")
             try:
-                # Combine Master IP and compute node IPs for process distribution
-                hosts = [config.master_ip] + [config.node_ips[i] for i in range(config.nodes) if i < len(config.node_ips)]
-                total_hosts = len(hosts)
-                
+                # Master gets exactly 1 process (R0) to minimize workload, remaining distributed to compute nodes
                 with open(hostfile_path, "w") as f:
-                    for idx, ip in enumerate(hosts):
-                        slots = (config.processes // total_hosts) + (1 if idx < (config.processes % total_hosts) else 0)
-                        if slots > 0:
-                            f.write(f"{ip} slots={slots}\n")
+                    f.write(f"{config.master_ip} slots=1\n")
+                    
+                    rem_procs = max(0, config.processes - 1)
+                    for idx in range(config.nodes):
+                        if idx < len(config.node_ips):
+                            ip = config.node_ips[idx]
+                            slots = (rem_procs // config.nodes) + (1 if idx < (rem_procs % config.nodes) else 0)
+                            if slots > 0:
+                                f.write(f"{ip} slots={slots}\n")
                 cmd.extend(["--hostfile", hostfile_path])
-                sim_state.logs.append(f"[System] Created MPI hostfile configurations (including Master) at: {hostfile_path}")
+                sim_state.logs.append(f"[System] Created MPI hostfile configurations (Master runs 1 coordinator process, Nodes run remainder) at: {hostfile_path}")
                 
                 # Log the generated hostfile content for verification
                 sim_state.logs.append("[System] Hostfile contents:")

@@ -2078,12 +2078,22 @@
             
             const mIp = document.getElementById('ip-master') ? document.getElementById('ip-master').value : masterIp;
             
-            // Total computing hosts: Master + active nodes
-            const totalHosts = 1 + nodes;
-            let hostRanks = Array.from({ length: totalHosts }, () => []);
-            for (let r = 0; r < procs; r++) {
-                let hostIdx = r % totalHosts;
-                hostRanks[hostIdx].push(r);
+            let hostRanks = Array.from({ length: 1 + nodes }, () => []);
+            
+            if (nodes === 0) {
+                // If 0 compute nodes, Master runs all processes
+                for (let r = 0; r < procs; r++) {
+                    hostRanks[0].push(r);
+                }
+            } else {
+                // Master gets exactly 1 coordinator rank (R0)
+                hostRanks[0].push(0);
+                
+                // Distribute remaining ranks (R1 to R_procs-1) among compute nodes
+                for (let r = 1; r < procs; r++) {
+                    let nodeIdx = (r - 1) % nodes;
+                    hostRanks[nodeIdx + 1].push(r);
+                }
             }
             
             // Render Master row with computing ranks
