@@ -98,56 +98,288 @@ void init_random_system(ParticleSystem &sys, int n) {
     }
 }
 
-// Tính toán lực hấp dẫn tương tác trực tiếp O(N^2) và cập nhật hệ thức tích phân Leapfrog
-void update_particles(ParticleSystem &sys, double dt) {
-    int n = sys.n; // Số lượng hạt trong hệ
-    
-    std::vector<double> ax(n, 0.0); // Mảng lưu trữ thành phần gia tốc ax
-    std::vector<double> ay(n, 0.0); // Mảng lưu trữ thành phần gia tốc ay
-    std::vector<double> az(n, 0.0); // Mảng lưu trữ thành phần gia tốc az
+// Cấu trúc nút cho cây 3D Octree sử dụng thuật toán Barnes-Hut
+struct OctreeNode {
+    double cx, cy, cz;      // Tọa độ tâm khối lượng (Center of Mass)
+    double total_mass;      // Tổng khối lượng các hạt thuộc nút này
+    double center_x, center_y, center_z; // Tâm hình học của hộp bao (Bounding Box)
+    double size;            // Kích thước cạnh hộp bao
+    int particle_idx;       // Chỉ số của hạt nếu là nút lá (>=0), -1 nếu trống, -2 nếu là nút trong (internal node)
+    int children[8];        // Chỉ số của 8 nút con trong mảng phẳng (-1 nếu không có)
+};
 
-    // Tính toán gia tốc hấp dẫn dựa trên luật tương tác trực tiếp
+// Cấu trúc cây 3D Octree
+struct Octree {
+    std::vector<OctreeNode> nodes;
+    const std::vector<double> &px;
+    const std::vector<double> &py;
+    const std::vector<double> &pz;
+    const std::vector<double> &pmass;
+
+    Octree(const std::vector<double> &x, const std::vector<double> &y, const std::vector<double> &z, const std::vector<double> &mass)
+        : px(x), py(y), pz(z), pmass(mass) {
+        nodes.reserve(8 * x.size());
+    }
+
+    // Xây dựng cây từ tất cả hạt
+    void build() {
+        nodes.clear();
+        int n = px.size();
+        if (n == 0) return;
+
+        // 1. Tìm bounding box bao quanh tất cả các hạt
+        double min_x = px[0], max_x = px[0];
+        double min_y = py[0], max_y = py[0];
+        double min_z = pz[0], max_z = pz[0];
+
+        for (int i = 1; i < n; i++) {
+            if (px[i] < min_x) min_x = px[i];
+            if (px[i] > max_x) max_x = px[i];
+            if (py[i] < min_y) min_y = py[i];
+            if (py[i] > max_y) max_y = py[i];
+            if (pz[i] < min_z) min_z = pz[i];
+            if (pz[i] > max_z) max_z = pz[i];
+        }
+
+        double center_x = 0.5 * (min_x + max_x);
+        double center_y = 0.5 * (min_y + max_y);
+        double center_z = 0.5 * (min_z + max_z);
+        double size = max_x - min_x;
+        if (max_y - min_y > size) size = max_y - min_y;
+        if (max_z - min_z > size) size = max_z - min_z;
+        if (size < 1e-6) size = 1e-6; // Tránh trường hợp kích thước bằng 0
+
+        // Tạo nút gốc (root)
+        OctreeNode root;
+        root.center_x = center_x;
+        root.center_y = center_y;
+        root.center_z = center_z;
+        root.size = size;
+        root.cx = 0.0;
+        root.cy = 0.0;
+        root.cz = 0.0;
+        root.total_mass = 0.0;
+        root.particle_idx = -1;
+        for (int i = 0; i < 8; i++) root.children[i] = -1;
+
+        nodes.push_back(root);
+
+        // Chèn tất cả các hạt vào cây
+        for (int i = 0; i < n; i++) {
+            insert(0, i);
+        }
+
+        // Tính toán tâm khối lượng cho tất cả các nút trong
+        compute_distribution(0);
+    }
+
+    // Xác định góc phần tư con tương ứng của hạt
+    int get_child_index(const OctreeNode &node, double x, double y, double z) {
+        int idx = 0;
+        if (x >= node.center_x) idx |= 1;
+        if (y >= node.center_y) idx |= 2;
+        if (z >= node.center_z) idx |= 4;
+        return idx;
+    }
+
+    // Đệ quy chèn hạt vào cây
+    void insert(int node_idx, int p_idx) {
+        double x_val = px[p_idx];
+        double y_val = py[p_idx];
+        double z_val = pz[p_idx];
+        double m_val = pmass[p_idx];
+
+        // Nếu nút đang trống, chèn trực tiếp hạt vào đây
+        if (nodes[node_idx].particle_idx == -1) {
+            nodes[node_idx].particle_idx = p_idx;
+            nodes[node_idx].cx = x_val;
+            nodes[node_idx].cy = y_val;
+            nodes[node_idx].cz = z_val;
+            nodes[node_idx].total_mass = m_val;
+            return;
+        }
+
+        // Nếu nút là nút lá chứa một hạt khác, tiến hành phân chia (subdivide)
+        if (nodes[node_idx].particle_idx >= 0) {
+            int existing_p_idx = nodes[node_idx].particle_idx;
+
+            // Nếu 2 hạt trùng khít tọa độ, tạo độ lệch siêu nhỏ để tránh đệ quy vô hạn
+            if (std::abs(px[existing_p_idx] - x_val) < 1e-9 &&
+                std::abs(py[existing_p_idx] - y_val) < 1e-9 &&
+                std::abs(pz[existing_p_idx] - z_val) < 1e-9) {
+                x_val += 1e-8 * (((double)rand() / RAND_MAX) - 0.5);
+                y_val += 1e-8 * (((double)rand() / RAND_MAX) - 0.5);
+                z_val += 1e-8 * (((double)rand() / RAND_MAX) - 0.5);
+            }
+
+            double parent_size = nodes[node_idx].size;
+            double child_size = 0.5 * parent_size;
+            double parent_cx = nodes[node_idx].center_x;
+            double parent_cy = nodes[node_idx].center_y;
+            double parent_cz = nodes[node_idx].center_z;
+
+            int child_start_idx = nodes.size();
+            for (int i = 0; i < 8; i++) {
+                OctreeNode child;
+                child.center_x = parent_cx + ((i & 1) ? 0.25 : -0.25) * parent_size;
+                child.center_y = parent_cy + ((i & 2) ? 0.25 : -0.25) * parent_size;
+                child.center_z = parent_cz + ((i & 4) ? 0.25 : -0.25) * parent_size;
+                child.size = child_size;
+                child.cx = 0.0;
+                child.cy = 0.0;
+                child.cz = 0.0;
+                child.total_mass = 0.0;
+                child.particle_idx = -1;
+                for (int j = 0; j < 8; j++) child.children[j] = -1;
+                nodes.push_back(child);
+            }
+
+            for (int i = 0; i < 8; i++) {
+                nodes[node_idx].children[i] = child_start_idx + i;
+            }
+
+            nodes[node_idx].particle_idx = -2; // Đánh dấu thành nút trong
+
+            // Chèn lại hạt cũ xuống các nút con
+            int child_idx_existing = get_child_index(nodes[node_idx], px[existing_p_idx], py[existing_p_idx], pz[existing_p_idx]);
+            insert(nodes[node_idx].children[child_idx_existing], existing_p_idx);
+
+            // Chèn hạt mới
+            int child_idx_new = get_child_index(nodes[node_idx], x_val, y_val, z_val);
+            insert(nodes[node_idx].children[child_idx_new], p_idx);
+            return;
+        }
+
+        // Nếu là nút trong, chèn tiếp đệ quy
+        if (nodes[node_idx].particle_idx == -2) {
+            int child_idx = get_child_index(nodes[node_idx], x_val, y_val, z_val);
+            insert(nodes[node_idx].children[child_idx], p_idx);
+            return;
+        }
+    }
+
+    // Đệ quy tính tổng khối lượng và trọng tâm khối lượng của các nút trong
+    void compute_distribution(int node_idx) {
+        if (nodes[node_idx].particle_idx == -1) return;
+        if (nodes[node_idx].particle_idx >= 0) return; // Nút lá đã có sẵn cx, cy, cz, mass
+
+        double total_m = 0.0;
+        double sum_cx = 0.0;
+        double sum_cy = 0.0;
+        double sum_cz = 0.0;
+
+        for (int i = 0; i < 8; i++) {
+            int child_idx = nodes[node_idx].children[i];
+            if (child_idx != -1) {
+                compute_distribution(child_idx);
+                double child_m = nodes[child_idx].total_mass;
+                if (child_m > 0) {
+                    total_m += child_m;
+                    sum_cx += nodes[child_idx].cx * child_m;
+                    sum_cy += nodes[child_idx].cy * child_m;
+                    sum_cz += nodes[child_idx].cz * child_m;
+                }
+            }
+        }
+
+        if (total_m > 0) {
+            nodes[node_idx].total_mass = total_m;
+            nodes[node_idx].cx = sum_cx / total_m;
+            nodes[node_idx].cy = sum_cy / total_m;
+            nodes[node_idx].cz = sum_cz / total_m;
+        }
+    }
+
+    // Đệ quy tính gia tốc từ cây tác động lên hạt i
+    void calculate_force(int node_idx, double ipx, double ipy, double ipz, int ip_idx, double theta, double epsilon, double G_const, double &ax, double &ay, double &az) const {
+        if (nodes[node_idx].particle_idx == -1) return;
+
+        // Nếu là nút lá, tính lực tương tác trực tiếp
+        if (nodes[node_idx].particle_idx >= 0) {
+            int jp_idx = nodes[node_idx].particle_idx;
+            if (jp_idx == ip_idx) return;
+
+            double dx = px[jp_idx] - ipx;
+            double dy = py[jp_idx] - ipy;
+            double dz = pz[jp_idx] - ipz;
+
+            double distSqr = dx*dx + dy*dy + dz*dz + epsilon*epsilon;
+            double invDist = 1.0 / std::sqrt(distSqr);
+            double invDistCube = invDist * invDist * invDist;
+
+            double f = G_const * pmass[jp_idx] * invDistCube;
+            ax += dx * f;
+            ay += dy * f;
+            az += dz * f;
+            return;
+        }
+
+        // Nếu là nút trong, kiểm tra tiêu chí mở rộng Multipole Acceptance Criterion (MAC)
+        double dx = nodes[node_idx].cx - ipx;
+        double dy = nodes[node_idx].cy - ipy;
+        double dz = nodes[node_idx].cz - ipz;
+
+        double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (dist == 0.0) return;
+
+        // Nếu kích thước nút chia cho khoảng cách < theta, xấp xỉ lực bằng Center of Mass
+        if (nodes[node_idx].size / dist < theta) {
+            double distSqr = dx*dx + dy*dy + dz*dz + epsilon*epsilon;
+            double invDist = 1.0 / std::sqrt(distSqr);
+            double invDistCube = invDist * invDist * invDist;
+
+            double f = G_const * nodes[node_idx].total_mass * invDistCube;
+            ax += dx * f;
+            ay += dy * f;
+            az += dz * f;
+        } else {
+            // Ngược lại, duyệt đệ quy tiếp các nút con
+            for (int i = 0; i < 8; i++) {
+                int child_idx = nodes[node_idx].children[i];
+                if (child_idx != -1) {
+                    calculate_force(child_idx, ipx, ipy, ipz, ip_idx, theta, epsilon, G_const, ax, ay, az);
+                }
+            }
+        }
+    }
+};
+
+// Tính toán lực bằng thuật toán Barnes-Hut O(N log N) và cập nhật Leapfrog
+void update_particles(ParticleSystem &sys, double dt) {
+    int n = sys.n;
+    
+    std::vector<double> ax(n, 0.0);
+    std::vector<double> ay(n, 0.0);
+    std::vector<double> az(n, 0.0);
+
+    // 1. Khởi tạo và xây dựng cây Octree từ tất cả hạt toàn cục
+    Octree tree(sys.x, sys.y, sys.z, sys.mass);
+    tree.build();
+
+    // 2. Tính toán gia tốc bằng cách duyệt cây song song OpenMP
     #pragma omp parallel for
-    for (int i = 0; i < n; i++) { // Duyệt qua từng hạt i chịu lực
+    for (int i = 0; i < n; i++) {
         double acc_x = 0.0;
         double acc_y = 0.0;
         double acc_z = 0.0;
         
-        double xi = sys.x[i];
-        double yi = sys.y[i];
-        double zi = sys.z[i];
-
-        for (int j = 0; j < n; j++) { // Duyệt qua tất cả các hạt j gây lực lên i
-            if (i == j) continue; // Bỏ qua tương tác của hạt với chính nó
-            
-            double dx = sys.x[j] - xi; // Khoảng cách thành phần delta_x
-            double dy = sys.y[j] - yi; // Khoảng cách thành phần delta_y
-            double dz = sys.z[j] - zi; // Khoảng cách thành phần delta_z
-            
-            double distSqr = dx*dx + dy*dy + dz*dz + EPSILON*EPSILON; // Bình phương khoảng cách cộng hệ số làm mềm
-            double invDist = 1.0 / sqrt(distSqr); // Nghịch đảo khoảng cách 1/r
-            double invDistCube = invDist * invDist * invDist; // Nghịch đảo khoảng cách lập phương 1/r^3
-            
-            double f = G * sys.mass[j] * invDistCube; // Tính hệ số lực hấp dẫn tương ứng
-            
-            acc_x += dx * f; // Tích lũy gia tốc thành phần x
-            acc_y += dy * f; // Tích lũy gia tốc thành phần y
-            acc_z += dz * f; // Tích lũy gia tốc thành phần z
-        }
-        ax[i] = acc_x; // Lưu trữ gia tốc x cuối cùng của hạt i
-        ay[i] = acc_y; // Lưu trữ gia tốc y cuối cùng của hạt i
-        az[i] = acc_z; // Lưu trữ gia tốc z cuối cùng của hạt i
+        // Sử dụng theta = 0.5 cho cân bằng tốt nhất giữa hiệu năng và độ chính xác
+        tree.calculate_force(0, sys.x[i], sys.y[i], sys.z[i], i, 0.5, EPSILON, G, acc_x, acc_y, acc_z);
+        
+        ax[i] = acc_x;
+        ay[i] = acc_y;
+        az[i] = acc_z;
     }
 
-    // Cập nhật vận tốc và tọa độ hạt theo phương pháp tích phân Leapfrog
-    for (int i = 0; i < n; i++) { // Duyệt qua từng hạt để cập nhật động học
-        sys.vx[i] += ax[i] * dt; // Cập nhật vận tốc vx = vx + ax * dt
-        sys.vy[i] += ay[i] * dt; // Cập nhật vận tốc vy = vy + ay * dt
-        sys.vz[i] += az[i] * dt; // Cập nhật vận tốc vz = vz + az * dt
+    // 3. Cập nhật vận tốc và tọa độ hạt theo phương pháp tích phân Leapfrog
+    for (int i = 0; i < n; i++) {
+        sys.vx[i] += ax[i] * dt;
+        sys.vy[i] += ay[i] * dt;
+        sys.vz[i] += az[i] * dt;
         
-        sys.x[i] += sys.vx[i] * dt; // Cập nhật tọa độ x = x + vx * dt
-        sys.y[i] += sys.vy[i] * dt; // Cập nhật tọa độ y = y + vy * dt
-        sys.z[i] += sys.vz[i] * dt; // Cập nhật tọa độ z = z + vz * dt
+        sys.x[i] += sys.vx[i] * dt;
+        sys.y[i] += sys.vy[i] * dt;
+        sys.z[i] += sys.vz[i] * dt;
     }
 }
 
